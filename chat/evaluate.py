@@ -26,8 +26,8 @@ def in_language(answer, lang):
     khmer = len(KHMER.findall(answer))
     if lang == "km":
         return khmer >= 5
-    # English: mostly Latin letters, little Khmer
-    return khmer < 5 and len(LATIN_WORD.findall(answer)) >= 1
+    # English (or a numbers-only answer like "30" or "x = 3"): little or no Khmer
+    return khmer < 5 and bool(answer.strip())
 
 
 def score(item, answer):
