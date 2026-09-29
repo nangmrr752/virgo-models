@@ -1,0 +1,13 @@
+# Trained weights are large: keep them on Hugging Face or Cloudflare R2, not in git.
+**/out/
+*.safetensors
+*.bin
+*.gguf
+*.onnx
+__pycache__/
+.venv/
+*.wav
+*.mp3
+*.mp4
+*.png
+!docs/*.png

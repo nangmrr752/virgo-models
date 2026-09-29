@@ -1,0 +1,17 @@
+# Virgo 1.0. Install PyTorch first for your machine (CPU or CUDA): https://pytorch.org/get-started/
+torch>=2.4
+transformers>=4.50
+accelerate>=1.0
+peft>=0.13
+datasets>=3.0
+diffusers>=0.33
+soundfile>=0.12
+librosa>=0.10
+kokoro>=0.9
+sentencepiece
+imageio[ffmpeg]
+ftfy
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart
+websockets>=12
