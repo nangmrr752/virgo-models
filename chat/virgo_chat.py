@@ -28,7 +28,20 @@ class VirgoChat:
         self.gemma = "gemma" in base.lower()
 
     def _prompt(self, history, system=SYSTEM):
-        msgs = [m for m in history if m["role"] in ("user", "assistant")]
+        # Gemma needs user/assistant turns to alternate: back-to-back turns from the same side (an
+        # interrupted or failed answer in realtime voice) are joined, empty ones dropped, and the
+        # conversation starts with the user.
+        msgs = []
+        for m in history:
+            content = str(m.get("content") or "").strip()
+            if m.get("role") not in ("user", "assistant") or not content:
+                continue
+            if msgs and msgs[-1]["role"] == m["role"]:
+                msgs[-1] = {"role": m["role"], "content": f"{msgs[-1]['content']}\n\n{content}"}
+            else:
+                msgs.append({"role": m["role"], "content": content})
+        while msgs and msgs[0]["role"] != "user":
+            msgs.pop(0)
         if self.gemma and msgs:  # Gemma has no system role
             msgs = [{**msgs[0], "content": f"{system}\n\n{msgs[0]['content']}"}] + msgs[1:]
         else:

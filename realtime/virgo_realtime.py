@@ -69,21 +69,25 @@ async def handle(ws, chat, speech, vad):
         conv.history.append({"role": "user", "content": text})
         loop = asyncio.get_running_loop()
         pending, full = "", ""
-        stream = conv.chat.stream(conv.history)
-        await send("state", state="speaking")
-        while True:
-            piece = await loop.run_in_executor(None, next, stream, None)
-            if piece is None:
-                break
-            pending += piece
-            full += piece
-            await send("reply", text=full)
-            *done, pending = SENTENCE_END.split(pending)
-            for sentence in done:
-                await speak(sentence)
-        if pending.strip():
-            await speak(pending)
-        conv.history.append({"role": "assistant", "content": full.strip()})
+        try:
+            stream = conv.chat.stream(conv.history)
+            await send("state", state="speaking")
+            while True:
+                piece = await loop.run_in_executor(None, next, stream, None)
+                if piece is None:
+                    break
+                pending += piece
+                full += piece
+                await send("reply", text=full)
+                *done, pending = SENTENCE_END.split(pending)
+                for sentence in done:
+                    await speak(sentence)
+            if pending.strip():
+                await speak(pending)
+        finally:
+            # Keep what Virgo said, even when interrupted or failed, so turns stay user/assistant.
+            if full.strip():
+                conv.history.append({"role": "assistant", "content": full.strip()})
         await send("state", state="listening")
 
     async def speak(sentence):
