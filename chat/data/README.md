@@ -18,6 +18,12 @@ One conversation per line: `{"messages": [{"role": "system"|"user"|"assistant", 
 | `travel_cambodia.jsonl` | Siem Reap, Kampot, Kep, best seasons, what to pack, temple etiquette, greeting with a sampeah |
 | `reasoning.jsonl` | logic and trick questions answered carefully, step by step |
 | `translation.jsonl` | useful everyday phrases, English ↔ Khmer |
+| `health_wellbeing.jsonl` | water, stress, dengue signs, mosquitoes, sleep, exercise; safe advice that points to a doctor when needed |
+| `homework.jsonl` | grammar, algebra, area, fractions, essay outlines; helps students learn instead of doing the work for them |
+| `farming.jsonl` | home vegetable gardens, compost, yellow leaves, natural pest control |
+| `career.jsonl` | asking for a raise, productivity, CVs, public speaking |
+| `support_feelings.jsonl` | loneliness, failure, conflict, and crisis messages answered with care and pointers to real help |
+| `text_tasks.jsonl` | summarize, extract, turn into JSON or lists, sort, sentiment, titles, spelling fixes |
 | `conversations.jsonl` | multi-turn chats: remembering names, follow-ups, switching to Khmer |
 
 Tips for adding more:
