@@ -24,6 +24,22 @@ Everything is described in [`virgo.json`](virgo.json).
 
 Open the link → **Runtime → Change runtime type → T4 GPU** → **Runtime → Run all** → paste your Hugging Face token. Free, about 30–60 minutes.
 
+## Run Virgo for the website (chat + real-time voice)
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nangmrr752/virgo-models/blob/main/serve/serve_colab.ipynb) — a free **test** server: it runs your trained Virgo-1.0-Angkor on Colab and prints `VIRGO_API_URL` and `VIRGO_API_KEY` for the Worker's secrets.
+
+For a permanent server on a rented GPU (RunPod, Vast.ai…):
+
+```bash
+git clone https://github.com/nangmrr752/virgo-models && cd virgo-models
+pip install -r requirements-serve.txt
+huggingface-cli download <your-name>/Virgo-1.0-Angkor --local-dir chat/out/virgo-1.0-chat-lora
+export VIRGO_API_KEY=<a long random key> VIRGO_PRELOAD=chat,speech
+uvicorn serve.app:app --host 0.0.0.0 --port 8000
+```
+
+The website uses `POST /v1/chat` for chat and the `/v1/realtime` WebSocket for **Virgo Live**: it listens (voice activity detection + Whisper), answers with Virgo-1.0-Angkor, and speaks each sentence as soon as it's written (Khmer MMS voice; English Kokoro, or MMS English where Kokoro can't be installed). Talking over Virgo interrupts it.
+
 ## What "our own model" means here
 
 Training a model from zero needs huge data and thousands of GPUs. Virgo 1.0 does what most

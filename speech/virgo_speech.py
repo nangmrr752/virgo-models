@@ -64,22 +64,38 @@ class VirgoSpeech:
             return self._khmer(text)
         return self._english(text, voice)
 
-    def _khmer(self, text):
-        if self._khmer_tts is None:
-            from transformers import AutoTokenizer, VitsModel
+    @staticmethod
+    def _mms(name):
+        from transformers import AutoTokenizer, VitsModel
 
-            self._khmer_tts = (AutoTokenizer.from_pretrained("facebook/mms-tts-khm"), VitsModel.from_pretrained("facebook/mms-tts-khm").eval())
-        tok, model = self._khmer_tts
+        return AutoTokenizer.from_pretrained(name), VitsModel.from_pretrained(name).eval()
+
+    @staticmethod
+    def _speak_mms(pair, text):
+        tok, model = pair
         with torch.inference_mode():
             wave = model(**tok(text, return_tensors="pt")).waveform[0].numpy()
         return wave.astype(np.float32), model.config.sampling_rate
 
-    def _english(self, text, voice):
-        if self._english_tts is None:
-            from kokoro import KPipeline
+    def _khmer(self, text):
+        if self._khmer_tts is None:
+            self._khmer_tts = self._mms("facebook/mms-tts-khm")
+        return self._speak_mms(self._khmer_tts, text)
 
-            self._english_tts = KPipeline(lang_code="a")  # American English
-        parts = [audio for _, _, audio in self._english_tts(text, voice=voice)]
+    def _english(self, text, voice):
+        # Kokoro sounds most natural; where it can't be installed (e.g. Python 3.13 on Colab), Meta's
+        # MMS English voice is used instead.
+        if self._english_tts is None:
+            try:
+                from kokoro import KPipeline
+
+                self._english_tts = ("kokoro", KPipeline(lang_code="a"))  # American English
+            except Exception:
+                self._english_tts = ("mms", self._mms("facebook/mms-tts-eng"))
+        kind, engine = self._english_tts
+        if kind == "mms":
+            return self._speak_mms(engine, text)
+        parts = [audio for _, _, audio in engine(text, voice=voice)]
         return np.concatenate(parts).astype(np.float32), 24000
 
 

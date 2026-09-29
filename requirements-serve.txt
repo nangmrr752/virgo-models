@@ -1,0 +1,6 @@
+# The Virgo API server (serve/app.py): chat, speech and realtime voice. Works on Colab's Python 3.13.
+-r requirements-train.txt
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart
+soundfile>=0.12

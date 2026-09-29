@@ -41,7 +41,9 @@ class Conversation:
         self.speaking_task = None
 
     def speech_prob(self, samples):
-        probs = [self.vad(torch.from_numpy(samples[i:i + 512]), RATE).item() for i in range(0, len(samples) - 511, 512)]
+        if self.vad is None:  # no Silero VAD: a simple loudness check
+            return 1.0 if len(samples) and float(np.sqrt(np.mean(samples ** 2))) > 0.02 else 0.0
+        probs = [self.vad(torch.from_numpy(samples[i:i + 512].copy()), RATE).item() for i in range(0, len(samples) - 511, 512)]
         return max(probs, default=0.0)
 
 
@@ -53,6 +55,16 @@ async def handle(ws, chat, speech, vad):
         await ws.send(json.dumps({"type": kind, **data}, ensure_ascii=False))
 
     async def answer(text):
+        try:
+            await reply_to(text)
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:  # keep the conversation going; the page falls back if it closes
+            print("Virgo realtime error:", repr(err))
+            await send("reply", text="Sorry, something went wrong on my side. Please say that again.")
+            await send("state", state="listening")
+
+    async def reply_to(text):
         await send("state", state="thinking")
         conv.history.append({"role": "user", "content": text})
         loop = asyncio.get_running_loop()
@@ -89,9 +101,13 @@ async def handle(ws, chat, speech, vad):
         samples = np.frombuffer(message, np.int16).astype(np.float32) / 32768
         voice = conv.speech_prob(samples) > 0.5
         if voice:
-            if conv.speaking_task and not conv.speaking_task.done():
-                conv.speaking_task.cancel()  # you talked over Virgo: stop and listen
-                await send("state", state="listening")
+            if not talking:
+                # You started talking: stop Virgo's voice on the page (even if the answer is already
+                # fully sent and just playing), and stop writing the rest of the answer.
+                await send("interrupted")
+                if conv.speaking_task and not conv.speaking_task.done():
+                    conv.speaking_task.cancel()
+                    await send("state", state="listening")
             talking, silent_for = True, 0.0
         elif talking:
             silent_for += len(samples) / RATE
@@ -106,13 +122,23 @@ async def handle(ws, chat, speech, vad):
                 conv.speaking_task = asyncio.create_task(answer(text))
 
 
+def load_vad():
+    """Silero VAD (downloaded once); None means a simple loudness check is used instead."""
+    try:
+        vad, _ = torch.hub.load("snakers4/silero-vad", "silero_vad", trust_repo=True)
+        return vad
+    except Exception as err:
+        print("Silero VAD unavailable, using a loudness check:", err)
+        return None
+
+
 async def main():
     import websockets
 
     adapter = "chat/out/virgo-1.0-chat-lora"
     chat = VirgoChat(adapter=adapter if os.path.isdir(adapter) else None)
     speech = VirgoSpeech()
-    vad, _ = torch.hub.load("snakers4/silero-vad", "silero_vad", trust_repo=True)
+    vad = load_vad()
     port = int(os.environ.get("PORT", 8765))
     async with websockets.serve(lambda ws: handle(ws, chat, speech, vad), "0.0.0.0", port, max_size=2**20):
         print(f"Virgo 1.0 realtime voice on ws://localhost:{port}")
