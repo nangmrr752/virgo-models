@@ -116,7 +116,13 @@ async def handle(ws, chat, speech, vad):
         if talking and silent_for >= SILENCE_S:
             audio = np.concatenate(utterance)
             talking, silent_for, utterance = False, 0.0, []
-            text = await asyncio.get_running_loop().run_in_executor(None, conv.speech.stt, {"raw": audio, "sampling_rate": RATE})
+            try:
+                text = await asyncio.get_running_loop().run_in_executor(None, conv.speech.stt, {"raw": audio, "sampling_rate": RATE})
+            except Exception as err:  # one bad turn never ends the conversation
+                print("Virgo realtime speech-to-text error:", repr(err))
+                await send("reply", text="Sorry, I didn't catch that. Please say it again.")
+                await send("state", state="listening")
+                continue
             if text:
                 await send("heard", text=text)
                 conv.speaking_task = asyncio.create_task(answer(text))
