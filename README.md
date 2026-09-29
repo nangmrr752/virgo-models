@@ -7,7 +7,7 @@ small open model, tuned or set up to be Virgo: its name, its tone, English and K
 |---|---|---|---|---|
 | 1 | **Chat** | `chat/` | Gemma 3 4B + Virgo LoRA (trained here; 1B lighter, 12B smarter) | GPU, CPU (slow), Workers AI LoRA*, browser* |
 | 2 | **Text to speech** | `speech/virgo_speech.py tts` | MMS-TTS Khmer · Kokoro-82M (English) | CPU, GPU |
-| 3 | **Speech to text** | `speech/virgo_speech.py stt` | Whisper small, fine-tuned for Khmer (trained here) | CPU, GPU |
+| 3 | **Speech to text** | `speech/virgo_speech.py stt` | Whisper large-v3-turbo on a GPU (small on a CPU; small can be fine-tuned for Khmer here) | CPU, GPU |
 | 4 | **Transcribe** | `speech/virgo_speech.py transcribe` | the same Whisper, long audio + timestamps + `.srt` | CPU, GPU |
 | 5 | **Realtime speech to speech** | `realtime/` | VAD → Virgo STT → Virgo chat → Virgo TTS, streamed | GPU (best), CPU |
 | 6 | **Images** | `image/` | SD-Turbo (1–4 steps) + optional Virgo style LoRA | GPU, CPU (slow) |
