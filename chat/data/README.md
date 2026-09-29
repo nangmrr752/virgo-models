@@ -39,6 +39,7 @@ One conversation per line: `{"messages": [{"role": "system"|"user"|"assistant", 
 | `social_posts.jsonl` | Facebook and TikTok posts, captions, holiday notices |
 | `word_problems.jsonl` | everyday math with money, riel, rice and travel time |
 | `careful_requests.jsonl` | fake notes, exam cheating, fake news, weapons, private info: declined kindly with a helpful alternative |
+| `targeted_fixes.jsonl` | added after the first score: live info → suggest Search, translating into Khmer, the Download as Word button and paperclip, "Who is KSN?", percentages |
 | `conversations.jsonl` | multi-turn chats: remembering names, follow-ups, switching to Khmer |
 
 Tips for adding more:
