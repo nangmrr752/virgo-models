@@ -32,6 +32,13 @@ One conversation per line: `{"messages": [{"role": "system"|"user"|"assistant", 
 | `environment.jsonl` | plastic, recycling, climate change |
 | `sports.jsonl` | offside rule, Bokator, Kun Khmer |
 | `conversations_long.jsonl` | long 3–4 turn conversations: planning a business, a Siem Reap trip, an electricity bill, a child's birthday party |
+| `recipes.jsonl` | fish amok, rice without a cooker, samlor machu, quick egg dishes |
+| `english_lessons.jsonl` | English for Khmer speakers: a/an, tenses, did, office words, corrections, roleplay |
+| `cambodia_history_geo.jsonl` | independence (9 Nov 1953), 25 provinces, the Tonle Sap's reverse flow, Angkor, neighbors |
+| `how_to_tech.jsonl` | screenshots, freeing storage, Word to PDF, two-step verification |
+| `social_posts.jsonl` | Facebook and TikTok posts, captions, holiday notices |
+| `word_problems.jsonl` | everyday math with money, riel, rice and travel time |
+| `careful_requests.jsonl` | fake notes, exam cheating, fake news, weapons, private info: declined kindly with a helpful alternative |
 | `conversations.jsonl` | multi-turn chats: remembering names, follow-ups, switching to Khmer |
 
 Tips for adding more:
