@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "by": "KSN",
   "homepage": "https://virgoai.camksn.com",
-  "description": "Virgo 1.0: KSN's own assistant models for chat, speech and media, built on small open models and tuned to Virgo's voice, English and Khmer.",
-  "languages": ["en", "km"],
+  "description": "Virgo-1.0-Angkor: KSN's own assistant models for chat, speech and media, built on small open models and tuned to Virgo's voice, English and Khmer.",
+  "languages": [
+    "en",
+    "km"
+  ],
   "components": {
     "chat": {
       "base": "google/gemma-3-4b-it",
@@ -12,37 +15,64 @@
       "smarter": "google/gemma-3-12b-it",
       "method": "QLoRA fine-tune (4-bit) on chat/data: Virgo's identity, tone, Khmer, answer style; scored with chat/eval",
       "output": "chat/out/virgo-1.0-chat-lora",
-      "runs_on": ["gpu", "cpu (slow)", "Cloudflare Workers AI (LoRA, if the base is supported)", "browser (ONNX export)"]
+      "runs_on": [
+        "gpu",
+        "cpu (slow)",
+        "Cloudflare Workers AI (LoRA, if the base is supported)",
+        "browser (ONNX export)"
+      ]
     },
     "stt": {
       "base": "openai/whisper-small",
       "method": "fine-tune on Khmer + English speech (FLEURS km_kh by default)",
       "output": "speech/out/virgo-1.0-stt",
-      "runs_on": ["gpu", "cpu"]
+      "runs_on": [
+        "gpu",
+        "cpu"
+      ]
     },
     "transcribe": {
       "uses": "stt",
       "method": "long-audio transcription with timestamps (30 s chunks) and optional .srt subtitles"
     },
     "tts": {
-      "base": { "km": "facebook/mms-tts-khm", "en": "hexgrad/Kokoro-82M" },
+      "base": {
+        "km": "facebook/mms-tts-khm",
+        "en": "hexgrad/Kokoro-82M"
+      },
       "method": "ready-made voices; fine-tune notes in speech/README.md",
-      "runs_on": ["cpu", "gpu"]
+      "runs_on": [
+        "cpu",
+        "gpu"
+      ]
     },
     "realtime": {
-      "uses": ["stt", "chat", "tts"],
+      "uses": [
+        "stt",
+        "chat",
+        "tts"
+      ],
       "method": "voice activity detection → speech to text → chat → text to speech, streamed over a WebSocket, answer spoken sentence by sentence",
-      "runs_on": ["gpu (recommended)", "cpu (slower)"]
+      "runs_on": [
+        "gpu (recommended)",
+        "cpu (slower)"
+      ]
     },
     "image": {
       "base": "stabilityai/sd-turbo",
       "method": "fast 1–4 step generation; optional Virgo style LoRA (image/train_style_lora.md)",
-      "runs_on": ["gpu", "cpu (slow)"]
+      "runs_on": [
+        "gpu",
+        "cpu (slow)"
+      ]
     },
     "video": {
       "base": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
       "method": "text to video with real motion, 480p, about 5 seconds",
-      "runs_on": ["gpu (8 GB+ VRAM)"]
+      "runs_on": [
+        "gpu (8 GB+ VRAM)"
+      ]
     }
-  }
+  },
+  "model_name": "Virgo-1.0-Angkor"
 }

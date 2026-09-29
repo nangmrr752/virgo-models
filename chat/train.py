@@ -15,6 +15,7 @@ Check it with `python scripts/check_data.py` before training.
 import argparse
 import glob
 import json
+import math
 
 import torch
 from datasets import Dataset
@@ -102,7 +103,9 @@ def main():
         model=model,
         args=TrainingArguments(
             output_dir=args.out, num_train_epochs=args.epochs, learning_rate=args.lr,
-            per_device_train_batch_size=4, gradient_accumulation_steps=4, warmup_ratio=0.05,
+            per_device_train_batch_size=4, gradient_accumulation_steps=4,
+            # warmup_steps works on every transformers version (warmup_ratio was removed in newer ones)
+            warmup_steps=max(1, int(0.05 * math.ceil(len(ds) / 16) * args.epochs)),
             logging_steps=10, save_strategy="no", report_to=[],
             bf16=gpu and torch.cuda.is_bf16_supported(), fp16=gpu and not torch.cuda.is_bf16_supported(),
         ),

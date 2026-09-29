@@ -1,4 +1,4 @@
-# Virgo 1.0 — by KSN
+# Virgo-1.0-Angkor — by KSN
 
 Virgo 1.0 is KSN's own AI model family for [Virgo AI](https://virgoai.camksn.com). Each ability is a
 small open model, tuned or set up to be Virgo: its name, its tone, English and Khmer.
