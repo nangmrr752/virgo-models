@@ -5,7 +5,7 @@
     python speech/virgo_speech.py tts "សួស្តី ខ្ញុំឈ្មោះ Virgo" out.wav
 
 STT uses Whisper: Virgo's fine-tuned copy (speech/out/virgo-1.0-stt, from finetune_stt.py) when it
-exists, otherwise openai/whisper-small. TTS speaks Khmer with Meta MMS (facebook/mms-tts-khm) and
+exists, otherwise openai/whisper-large-v3-turbo on a GPU (whisper-small on a CPU). TTS speaks Khmer with Meta MMS (facebook/mms-tts-khm) and
 other text with Kokoro-82M (English, natural voices). Both run on a CPU.
 """
 import argparse
@@ -18,8 +18,12 @@ import torch
 
 KHMER = re.compile(r"[ក-៿᧠-᧿]")
 STT_TUNED = "speech/out/virgo-1.0-stt"
-STT_BASE = "openai/whisper-small"
 DEVICE = 0 if torch.cuda.is_available() else -1
+# Whisper large-v3-turbo hears Khmer far better than small; on a CPU, small stays (turbo is slow there).
+STT_BASE = os.environ.get("VIRGO_STT_MODEL") or ("openai/whisper-large-v3-turbo" if DEVICE == 0 else "openai/whisper-small")
+# Realtime voice picks only between these languages (Whisper codes), so Khmer isn't heard as another language.
+STT_LANGUAGES = [c.strip() for c in os.environ.get("VIRGO_STT_LANGUAGES", "km,en").split(",") if c.strip()]
+WHISPER_NAMES = {"km": "khmer", "en": "english"}
 
 
 class VirgoSpeech:
@@ -57,9 +61,26 @@ class VirgoSpeech:
         model = pipe.model
         features = pipe.feature_extractor(samples, sampling_rate=16000, return_tensors="pt").input_features
         features = features.to(model.device, next(model.parameters()).dtype)
+        language = language or self._pick_language(model, pipe.tokenizer, features)
         kwargs = {"language": language, "task": "transcribe"} if language else {}
         ids = model.generate(features, **kwargs)
         return pipe.tokenizer.batch_decode(ids, skip_special_tokens=True)[0].strip()
+
+    @staticmethod
+    def _pick_language(model, tokenizer, features):
+        """The most likely of STT_LANGUAGES (Whisper's own language guess, limited to those)."""
+        codes = [c for c in STT_LANGUAGES if tokenizer.convert_tokens_to_ids(f"<|{c}|>") not in (None, tokenizer.unk_token_id)]
+        if len(codes) < 2:
+            return WHISPER_NAMES.get(codes[0], codes[0]) if codes else None
+        try:
+            start = torch.tensor([[model.generation_config.decoder_start_token_id]], device=model.device)
+            logits = model(input_features=features, decoder_input_ids=start).logits[0, -1]
+            ids = [tokenizer.convert_tokens_to_ids(f"<|{c}|>") for c in codes]
+            best = codes[int(torch.argmax(logits[ids]))]
+            return WHISPER_NAMES.get(best, best)
+        except Exception as err:  # fall back to Whisper's free choice
+            print("Virgo speech: language pick failed:", repr(err))
+            return None
 
     # ---------- Transcribe (long audio, with timestamps) ----------
     def transcribe(self, path, language=None):
