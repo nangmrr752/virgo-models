@@ -1,0 +1,41 @@
+{
+  "_help": "Fill in your real details, then run: python chat/ksn/make_examples.py. Leave a field empty (\"\" or []) if it doesn't apply; Virgo will then point people to the portfolio instead of guessing. Khmer fields (_km) are optional but recommended.",
+  "name": "KSN",
+  "full_name": "",
+  "full_name_km": "",
+  "about": "KSN is the creator of Virgo AI.",
+  "about_km": "KSN គឺជាអ្នកបង្កើត Virgo AI។",
+  "location": "",
+  "location_km": "",
+  "portfolio": "https://soknang.camksn.com/",
+  "contact": {
+    "email": "",
+    "phone": "",
+    "telegram": "",
+    "facebook": "",
+    "website": "https://soknang.camksn.com/"
+  },
+  "services": [
+    {
+      "name": "",
+      "name_km": "",
+      "description": "",
+      "description_km": "",
+      "price": "",
+      "price_km": ""
+    }
+  ],
+  "projects": [
+    {
+      "name": "Virgo AI",
+      "name_km": "Virgo AI",
+      "description": "a free AI assistant website with chat, live voice, web search, image and video creation, file reading and text to speech, in English and Khmer",
+      "description_km": "គេហទំព័រជំនួយការ AI ឥតគិតថ្លៃ ដែលមានការជជែក សំឡេងផ្ទាល់ ការស្វែងរកលើអ៊ីនធឺណិត ការបង្កើតរូបភាព និងវីដេអូ ការអានឯកសារ និងការបម្លែងអត្ថបទទៅជាសំឡេង ជាភាសាខ្មែរ និងអង់គ្លេស",
+      "link": "https://virgoai.camksn.com"
+    }
+  ],
+  "how_to_order": "",
+  "how_to_order_km": "",
+  "working_hours": "",
+  "working_hours_km": ""
+}

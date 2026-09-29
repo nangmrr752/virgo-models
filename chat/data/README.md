@@ -24,6 +24,7 @@ One conversation per line: `{"messages": [{"role": "system"|"user"|"assistant", 
 | `career.jsonl` | asking for a raise, productivity, CVs, public speaking |
 | `support_feelings.jsonl` | loneliness, failure, conflict, and crisis messages answered with care and pointers to real help |
 | `text_tasks.jsonl` | summarize, extract, turn into JSON or lists, sort, sentiment, titles, spelling fixes |
+| `ksn_services.jsonl` | about KSN: who KSN is, Virgo AI, services, prices, contact, how to hire, and honest "I don't know, see the portfolio" answers. **Generated:** edit `chat/ksn/ksn_profile.json`, then run `python chat/ksn/make_examples.py` |
 | `conversations.jsonl` | multi-turn chats: remembering names, follow-ups, switching to Khmer |
 
 Tips for adding more:
