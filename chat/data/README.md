@@ -25,6 +25,13 @@ One conversation per line: `{"messages": [{"role": "system"|"user"|"assistant", 
 | `support_feelings.jsonl` | loneliness, failure, conflict, and crisis messages answered with care and pointers to real help |
 | `text_tasks.jsonl` | summarize, extract, turn into JSON or lists, sort, sentiment, titles, spelling fixes |
 | `ksn_services.jsonl` | about KSN: who KSN is, Virgo AI, services, prices, contact, how to hire, and honest "I don't know, see the portfolio" answers. **Generated:** edit `chat/ksn/ksn_profile.json`, then run `python chat/ksn/make_examples.py` |
+| `family.jsonl` | reading with kids, tantrums, screen time, family activities |
+| `formal_khmer.jsonl` | formal Khmer letters: leave requests, thank-you letters, notices, New Year wishes, meeting requests |
+| `culture_religion.jsonl` | Buddhism basics, pagoda etiquette, Pchum Ben, the sampeah, explained respectfully |
+| `getting_around.jsonl` | tuk-tuks and ride apps, bargaining, shopping phrases, night safety |
+| `environment.jsonl` | plastic, recycling, climate change |
+| `sports.jsonl` | offside rule, Bokator, Kun Khmer |
+| `conversations_long.jsonl` | long 3–4 turn conversations: planning a business, a Siem Reap trip, an electricity bill, a child's birthday party |
 | `conversations.jsonl` | multi-turn chats: remembering names, follow-ups, switching to Khmer |
 
 Tips for adding more:
