@@ -10,6 +10,7 @@ One conversation per line: `{"messages": [{"role": "system"|"user"|"assistant", 
 | `everyday_help.jsonl` | writing, explaining, math, money, tech, Cambodia facts, plus safe and honest answers (no live data without Search, no hacking, see a doctor) |
 | `khmer.jsonl` | the same kinds of help in natural Khmer |
 | `khmer_more.jsonl` | more Khmer: daily life, Khmer food and recipes, festivals and places, study, jobs and customers, phone and scam safety, polite speech, Khmer–English mixed messages, multi-turn chats |
+| `customer_support.jsonl` | helping people use Virgo AI (voice, Search, images, files, Word download, Memory, accounts) and fix common problems, plus general customer service: orders, refunds, complaints, replying to customers, handing off to a human; English and Khmer |
 | `conversations.jsonl` | multi-turn chats: remembering names, follow-ups, switching to Khmer |
 
 Tips for adding more:
