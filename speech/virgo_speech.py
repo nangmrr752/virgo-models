@@ -38,9 +38,28 @@ class VirgoSpeech:
         return self._stt
 
     def stt(self, audio, language=None):
-        """Short audio (a file path, or 16 kHz float samples) → text. `language` like "khmer"."""
+        """Short audio (a file path, 16 kHz float samples, or {"raw", "sampling_rate"}) → text.
+        `language` like "khmer"."""
+        if isinstance(audio, (dict, np.ndarray)):
+            return self._stt_samples(audio, language)
         kwargs = {"generate_kwargs": {"language": language, "task": "transcribe"}} if language else {}
         return self._pipeline()(audio, **kwargs)["text"].strip()
+
+    @torch.inference_mode()
+    def _stt_samples(self, audio, language=None):
+        # Microphone samples go straight to Whisper: newer transformers pipelines fail on raw arrays.
+        samples = audio["raw"] if isinstance(audio, dict) else audio
+        rate = audio.get("sampling_rate", 16000) if isinstance(audio, dict) else 16000
+        samples = np.asarray(samples, np.float32).reshape(-1)
+        if rate != 16000:
+            samples = np.interp(np.arange(0, len(samples), rate / 16000), np.arange(len(samples)), samples).astype(np.float32)
+        pipe = self._pipeline()
+        model = pipe.model
+        features = pipe.feature_extractor(samples, sampling_rate=16000, return_tensors="pt").input_features
+        features = features.to(model.device, next(model.parameters()).dtype)
+        kwargs = {"language": language, "task": "transcribe"} if language else {}
+        ids = model.generate(features, **kwargs)
+        return pipe.tokenizer.batch_decode(ids, skip_special_tokens=True)[0].strip()
 
     # ---------- Transcribe (long audio, with timestamps) ----------
     def transcribe(self, path, language=None):

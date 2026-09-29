@@ -28,6 +28,8 @@ Open the link → **Runtime → Change runtime type → T4 GPU** → **Runtime �
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nangmrr752/virgo-models/blob/main/serve/serve_colab.ipynb) — a free **test** server: it runs your trained Virgo-1.0-Angkor on Colab and prints `VIRGO_API_URL` and `VIRGO_API_KEY` for the Worker's secrets.
 
+Colab's free GPU limit reached? Use **Kaggle** instead (free T4, about 30 GPU hours a week): open [`serve/serve_kaggle.ipynb`](serve/serve_kaggle.ipynb) on Kaggle (**Create → New notebook → File → Import notebook → GitHub**, or upload the file). It needs phone verification and an `HF_TOKEN` secret (**Add-ons → Secrets**); the steps are at the top of the notebook.
+
 For a permanent server on a rented GPU (RunPod, Vast.ai…):
 
 ```bash
