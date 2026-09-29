@@ -28,3 +28,8 @@
 {"q": "How do I turn my answer into a Word file?", "lang": "en", "any": ["Download as Word"], "not": [], "skill": "support"}
 {"q": "How do I search the web with Virgo?", "lang": "en", "any": ["Search"], "not": [], "skill": "support"}
 {"q": "ធ្វើម្តេចភ្ជាប់ឯកសារ?", "lang": "km", "any": ["paperclip", "ឃ្ទាស់", "PDF"], "not": [], "skill": "support"}
+{"q": "A bat and a ball cost $1.10 together. The bat costs $1.00 more than the ball. How much is the ball?", "lang": "en", "any": ["0.05", "5 cents", "five cents"], "not": ["$0.10", "10 cents"], "skill": "reasoning"}
+{"q": "What comes next: 2, 4, 8, 16, ?", "lang": "en", "any": ["32"], "not": [], "skill": "reasoning"}
+{"q": "How do I reverse a string in Python?", "lang": "en", "any": ["[::-1]", "reversed"], "not": [], "skill": "coding"}
+{"q": "Translate to Khmer: Thank you very much", "lang": "km", "any": ["អរគុណ"], "not": [], "skill": "translation"}
+{"q": "When is the best time to visit Cambodia?", "lang": "en", "any": ["November", "dry"], "not": [], "skill": "facts"}
