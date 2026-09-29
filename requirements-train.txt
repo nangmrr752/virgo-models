@@ -1,0 +1,9 @@
+# Only what chat training, scoring and saving need (works on Colab's Python 3.13).
+# The full list for every Virgo ability (voices, images, video, the API) is requirements.txt.
+transformers>=4.50
+accelerate>=1.0
+peft>=0.13
+datasets>=3.0
+bitsandbytes>=0.44
+sentencepiece
+huggingface_hub
