@@ -20,7 +20,7 @@ Everything is described in [`virgo.json`](virgo.json).
 
 ## Train Virgo in one click
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nangmrr752/virgo-models/blob/claude/optimistic-noether-sh22bx/chat/train_colab.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nangmrr752/virgo-models/blob/main/chat/train_colab.ipynb)
 
 Open the link → **Runtime → Change runtime type → T4 GPU** → **Runtime → Run all** → paste your Hugging Face token. Free, about 30–60 minutes.
 
