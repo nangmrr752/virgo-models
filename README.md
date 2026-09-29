@@ -30,6 +30,15 @@ Open the link → **Runtime → Change runtime type → T4 GPU** → **Runtime �
 
 Colab's free GPU limit reached? Use **Kaggle** instead (free T4, about 30 GPU hours a week): open [`serve/serve_kaggle.ipynb`](serve/serve_kaggle.ipynb) on Kaggle (**Create → New notebook → File → Import notebook → GitHub**, or upload the file). It needs phone verification and an `HF_TOKEN` secret (**Add-ons → Secrets**); the steps are at the top of the notebook.
 
+**A fixed address (e.g. `https://virgo.camksn.com`) instead of a new one each run:**
+1. In Cloudflare, create a free tunnel: **Zero Trust → Networks → Tunnels → Create a tunnel → Cloudflared**. Give it the public hostname `virgo.camksn.com` → HTTP `localhost:8000`.
+2. Add two notebook secrets:
+   - `CF_TUNNEL_TOKEN`: the tunnel's token.
+   - `VIRGO_API_KEY`: a long password you choose.
+3. Set the Worker secrets once: `VIRGO_API_URL=https://virgo.camksn.com` and the same `VIRGO_API_KEY`.
+
+After that, running the notebook is all it takes. Without those secrets, the notebooks use a random `trycloudflare.com` address, as before.
+
 For a permanent server on a rented GPU (RunPod, Vast.ai…):
 
 ```bash
