@@ -15,11 +15,11 @@ class VirgoChat:
         self.tok = AutoTokenizer.from_pretrained(adapter or base)
         dtype = (torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16) if self.device == "cuda" else torch.float32
         try:
-            model = AutoModelForCausalLM.from_pretrained(base, torch_dtype=dtype)
+            model = AutoModelForCausalLM.from_pretrained(base, dtype=dtype)
         except ValueError:  # Gemma 3 4B and up are image+text models
             from transformers import Gemma3ForConditionalGeneration
 
-            model = Gemma3ForConditionalGeneration.from_pretrained(base, torch_dtype=dtype)
+            model = Gemma3ForConditionalGeneration.from_pretrained(base, dtype=dtype)
         if adapter:
             from peft import PeftModel
 
@@ -33,22 +33,23 @@ class VirgoChat:
             msgs = [{**msgs[0], "content": f"{system}\n\n{msgs[0]['content']}"}] + msgs[1:]
         else:
             msgs = [{"role": "system", "content": system}] + msgs
-        return self.tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt").to(self.device)
+        # Newer transformers return a dict (input_ids + attention_mask); older ones a tensor.
+        out = self.tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt", return_dict=True)
+        return {k: v.to(self.device) for k, v in out.items()}
 
     @torch.inference_mode()
     def reply(self, history, max_new_tokens=512, temperature=0.7):
-        ids = self._prompt(history)
-        out = self.model.generate(ids, max_new_tokens=max_new_tokens, do_sample=temperature > 0, temperature=temperature, top_p=0.9)
-        return self.tok.decode(out[0, ids.shape[1]:], skip_special_tokens=True).strip()
+        inputs = self._prompt(history)
+        sampling = {"do_sample": True, "temperature": temperature, "top_p": 0.9} if temperature > 0 else {"do_sample": False}
+        out = self.model.generate(**inputs, max_new_tokens=max_new_tokens, **sampling)
+        return self.tok.decode(out[0, inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
 
     def stream(self, history, max_new_tokens=512, temperature=0.7):
         """Yields the reply piece by piece (used by the realtime voice so it can speak early)."""
         from threading import Thread
 
-        ids = self._prompt(history)
+        inputs = self._prompt(history)
         streamer = TextIteratorStreamer(self.tok, skip_prompt=True, skip_special_tokens=True)
-        Thread(target=self.model.generate, kwargs=dict(
-            input_ids=ids, max_new_tokens=max_new_tokens, do_sample=temperature > 0,
-            temperature=temperature, top_p=0.9, streamer=streamer,
-        )).start()
+        sampling = {"do_sample": True, "temperature": temperature, "top_p": 0.9} if temperature > 0 else {"do_sample": False}
+        Thread(target=self.model.generate, kwargs=dict(**inputs, max_new_tokens=max_new_tokens, streamer=streamer, **sampling)).start()
         yield from streamer
