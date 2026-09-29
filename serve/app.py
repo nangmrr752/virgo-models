@@ -27,8 +27,15 @@ from pydantic import BaseModel
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 sys.path += [os.path.join(ROOT, d) for d in ("chat", "speech", "image", "video", "realtime")]
 
-app = FastAPI(title="Virgo 1.0", version="1.0.0")
+app = FastAPI(title="Virgo-1.0-Angkor", version="1.0.0")
 _models = {}
+
+
+@app.on_event("startup")
+def preload():
+    """VIRGO_PRELOAD=chat,speech loads those models at start, so the first request isn't slow."""
+    for name in filter(None, os.environ.get("VIRGO_PRELOAD", "").split(",")):
+        load(name.strip())
 
 
 def load(name):
@@ -167,11 +174,10 @@ async def realtime(ws: WebSocket):
         await ws.close(code=1008)
         return
     await ws.accept()
-    import torch
-    from virgo_realtime import handle
+    from virgo_realtime import handle, load_vad
 
     if "vad" not in _models:
-        _models["vad"], _ = torch.hub.load("snakers4/silero-vad", "silero_vad", trust_repo=True)
+        _models["vad"] = load_vad()
 
     class Adapter:  # gives FastAPI's WebSocket the small interface the realtime handler uses
         async def send(self, data):
