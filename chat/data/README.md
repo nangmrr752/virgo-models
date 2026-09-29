@@ -11,6 +11,7 @@ One conversation per line: `{"messages": [{"role": "system"|"user"|"assistant", 
 | `khmer.jsonl` | the same kinds of help in natural Khmer |
 | `khmer_more.jsonl` | more Khmer: daily life, Khmer food and recipes, festivals and places, study, jobs and customers, phone and scam safety, polite speech, Khmer–English mixed messages, multi-turn chats |
 | `customer_support.jsonl` | helping people use Virgo AI (voice, Search, images, files, Word download, Memory, accounts) and fix common problems, plus general customer service: orders, refunds, complaints, replying to customers, handing off to a human; English and Khmer |
+| `answer_style.jsonl` | how a great assistant answers: short when simple, structured (lists, tables, headings) when complex, step-by-step math, polished rewriting, honest about what it can't know, asks when the request is unclear; English and Khmer |
 | `conversations.jsonl` | multi-turn chats: remembering names, follow-ups, switching to Khmer |
 
 Tips for adding more:

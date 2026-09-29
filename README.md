@@ -5,7 +5,7 @@ small open model, tuned or set up to be Virgo: its name, its tone, English and K
 
 | # | Ability | Virgo 1.0 part | Built on (open model) | Runs on |
 |---|---|---|---|---|
-| 1 | **Chat** | `chat/` | Gemma 3 1B + Virgo LoRA (trained here) | GPU, CPU (slow), Workers AI LoRA*, browser* |
+| 1 | **Chat** | `chat/` | Gemma 3 4B + Virgo LoRA (trained here; 1B lighter, 12B smarter) | GPU, CPU (slow), Workers AI LoRA*, browser* |
 | 2 | **Text to speech** | `speech/virgo_speech.py tts` | MMS-TTS Khmer · Kokoro-82M (English) | CPU, GPU |
 | 3 | **Speech to text** | `speech/virgo_speech.py stt` | Whisper small, fine-tuned for Khmer (trained here) | CPU, GPU |
 | 4 | **Transcribe** | `speech/virgo_speech.py transcribe` | the same Whisper, long audio + timestamps + `.srt` | CPU, GPU |
@@ -35,9 +35,10 @@ Your code and training data live in this repo. Trained weights are large, so the
 # 1. PyTorch for your machine first: https://pytorch.org/get-started/
 pip install -r requirements.txt
 
-# 2. Check the training data, then train Virgo chat (a free Colab T4 GPU: chat/train_colab.ipynb)
+# 2. Check the training data, train Virgo chat (a free Colab T4 GPU: chat/train_colab.ipynb), and score it
 python scripts/check_data.py
-python chat/train.py
+python chat/train.py                 # Gemma 3 4B in 4 bits; --base google/gemma-3-1b-it for a CPU
+python chat/evaluate.py              # scores Virgo on chat/eval/questions.jsonl
 
 # 3. Try each ability
 python chat/chat.py
@@ -85,7 +86,7 @@ Virgo's own code here is yours. Each base model keeps its own license:
 
 | Model | License |
 |---|---|
-| Gemma 3 | [Gemma Terms of Use](https://ai.google.dev/gemma/terms): accept on Hugging Face before downloading |
+| Gemma 3 (1B, 4B, 12B) | [Gemma Terms of Use](https://ai.google.dev/gemma/terms): accept on Hugging Face before downloading |
 | Whisper | MIT |
 | Kokoro-82M | Apache 2.0 |
 | MMS-TTS (Khmer) | CC BY-NC 4.0: **non-commercial**. For a paid product, train or pick a commercially licensed Khmer voice. |

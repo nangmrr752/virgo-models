@@ -10,11 +10,16 @@ SYSTEM = (
 
 
 class VirgoChat:
-    def __init__(self, base="google/gemma-3-1b-it", adapter=None):
+    def __init__(self, base="google/gemma-3-4b-it", adapter=None):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.tok = AutoTokenizer.from_pretrained(adapter or base)
-        dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
-        model = AutoModelForCausalLM.from_pretrained(base, torch_dtype=dtype)
+        dtype = (torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16) if self.device == "cuda" else torch.float32
+        try:
+            model = AutoModelForCausalLM.from_pretrained(base, torch_dtype=dtype)
+        except ValueError:  # Gemma 3 4B and up are image+text models
+            from transformers import Gemma3ForConditionalGeneration
+
+            model = Gemma3ForConditionalGeneration.from_pretrained(base, torch_dtype=dtype)
         if adapter:
             from peft import PeftModel
 

@@ -7,8 +7,10 @@
   "languages": ["en", "km"],
   "components": {
     "chat": {
-      "base": "google/gemma-3-1b-it",
-      "method": "LoRA fine-tune on chat/data (Virgo's identity, tone, Khmer)",
+      "base": "google/gemma-3-4b-it",
+      "lighter": "google/gemma-3-1b-it",
+      "smarter": "google/gemma-3-12b-it",
+      "method": "QLoRA fine-tune (4-bit) on chat/data: Virgo's identity, tone, Khmer, answer style; scored with chat/eval",
       "output": "chat/out/virgo-1.0-chat-lora",
       "runs_on": ["gpu", "cpu (slow)", "Cloudflare Workers AI (LoRA, if the base is supported)", "browser (ONNX export)"]
     },

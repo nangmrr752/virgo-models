@@ -1,11 +1,12 @@
-"""Train Virgo 1.0 chat: a LoRA adapter on a small open model (Gemma 3 1B by default).
+"""Train Virgo 1.0 chat: a LoRA adapter on an open model (Gemma 3 4B by default).
 
     pip install -r requirements.txt
-    python chat/train.py                       # uses chat/data/*.jsonl
-    python chat/train.py --base google/gemma-3-1b-it --epochs 3
+    python chat/train.py                                  # Gemma 3 4B, uses chat/data/*.jsonl
+    python chat/train.py --base google/gemma-3-1b-it      # lighter and faster, less smart
+    python chat/train.py --base google/gemma-3-12b-it     # smartest; needs a bigger GPU (24 GB+)
 
-Runs on a free Google Colab T4 GPU in well under an hour for a few thousand examples. On a CPU it
-works but is slow. The adapter is saved to chat/out/virgo-1.0-chat-lora; add --merge to also save
+The 4B model is loaded in 4 bits (QLoRA) on a GPU, so it trains on a free Google Colab T4 in well
+under an hour for a few thousand examples. On a CPU, use the 1B model. The adapter is saved to chat/out/virgo-1.0-chat-lora; add --merge to also save
 a full merged model (for ONNX/browser export or servers without LoRA support).
 
 Data: one JSON object per line, {"messages": [{"role": "system"|"user"|"assistant", "content": ...}]}.
@@ -20,6 +21,31 @@ from datasets import Dataset
 from peft import LoraConfig, get_peft_model
 from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForLanguageModeling, Trainer, TrainingArguments
 
+DEFAULT_BASE = "google/gemma-3-4b-it"
+
+
+def load_base(name, four_bit):
+    """The base model; Gemma 3 4B and up are image+text models, so fall back to their full class."""
+    kwargs = {}
+    if torch.cuda.is_available():
+        kwargs["torch_dtype"] = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        if four_bit:
+            from transformers import BitsAndBytesConfig
+
+            kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True,
+                bnb_4bit_compute_dtype=kwargs["torch_dtype"],
+            )
+            kwargs["device_map"] = "auto"
+    else:
+        kwargs["torch_dtype"] = torch.float32
+    try:
+        return AutoModelForCausalLM.from_pretrained(name, **kwargs)
+    except ValueError:
+        from transformers import Gemma3ForConditionalGeneration
+
+        return Gemma3ForConditionalGeneration.from_pretrained(name, **kwargs)
+
 
 def load_examples(pattern):
     rows = []
@@ -33,7 +59,7 @@ def load_examples(pattern):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--base", default="google/gemma-3-1b-it")
+    p.add_argument("--base", default=DEFAULT_BASE)
     p.add_argument("--data", default="chat/data/*.jsonl")
     p.add_argument("--out", default="chat/out/virgo-1.0-chat-lora")
     p.add_argument("--epochs", type=float, default=3)
@@ -41,12 +67,18 @@ def main():
     p.add_argument("--max-len", type=int, default=1024)
     p.add_argument("--rank", type=int, default=16)
     p.add_argument("--merge", action="store_true", help="also save a merged full model")
+    p.add_argument("--full-precision", action="store_true", help="don't load the base in 4 bits (needs more GPU memory)")
     args = p.parse_args()
 
     tok = AutoTokenizer.from_pretrained(args.base)
     tok.pad_token = tok.pad_token or tok.eos_token
     gpu = torch.cuda.is_available()
-    model = AutoModelForCausalLM.from_pretrained(args.base, torch_dtype=torch.bfloat16 if gpu else torch.float32)
+    four_bit = gpu and not args.full_precision
+    model = load_base(args.base, four_bit)
+    if four_bit:
+        from peft import prepare_model_for_kbit_training
+
+        model = prepare_model_for_kbit_training(model)
 
     # Gemma's chat template has no system role: fold the system message into the first user turn.
     def to_text(example):
@@ -71,7 +103,8 @@ def main():
         args=TrainingArguments(
             output_dir=args.out, num_train_epochs=args.epochs, learning_rate=args.lr,
             per_device_train_batch_size=4, gradient_accumulation_steps=4, warmup_ratio=0.05,
-            logging_steps=10, save_strategy="no", bf16=gpu, report_to=[],
+            logging_steps=10, save_strategy="no", report_to=[],
+            bf16=gpu and torch.cuda.is_bf16_supported(), fp16=gpu and not torch.cuda.is_bf16_supported(),
         ),
         train_dataset=ds,
         data_collator=DataCollatorForLanguageModeling(tok, mlm=False),
@@ -81,6 +114,10 @@ def main():
     tok.save_pretrained(args.out)
     print(f"Saved the Virgo 1.0 chat adapter to {args.out}")
     if args.merge:
+        if four_bit:  # merge into a full-precision copy of the base, not the 4-bit one
+            from peft import PeftModel
+
+            model = PeftModel.from_pretrained(load_base(args.base, False), args.out)
         merged = model.merge_and_unload()
         merged.save_pretrained(f"{args.out}-merged")
         tok.save_pretrained(f"{args.out}-merged")
