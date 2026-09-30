@@ -127,6 +127,11 @@ def load_model(folder, device=None):
 
     if os.environ.get("VIRGO_VOX_OPTIMIZE") == "0" and "optimize" in inspect.signature(VoxCPM.from_pretrained).parameters:
         kwargs["optimize"] = False
+    # VoxCPM2 builds its 2B model in float32 before converting it: about 8 GB. Building it straight on
+    # the GPU keeps that out of RAM (Colab has 12 GB; the worker was killed for memory there).
+    if device.startswith("cuda"):
+        with torch.device(device):
+            return VoxCPM.from_pretrained(base, **kwargs)
     return VoxCPM.from_pretrained(base, **kwargs)
 
 
