@@ -21,12 +21,18 @@ import os
 import subprocess
 import sys
 import tempfile
+import re
 import threading
 
 VOICE_DIR = os.environ.get("VIRGO_VOX_DIR", "speech/out/virgo-1.0-angkor-voice")
 BASE = os.environ.get("VIRGO_VOX_BASE", "openbmb/VoxCPM2")
-FILES = ["voice.wav", "voice.json", "lora_weights.safetensors", "lora_config.json"]
+FILES = ["voice.wav", "voice.json", "voice_en.wav", "voice_en.json", "lora_weights.safetensors", "lora_config.json"]
 # Used when no voice sample exists yet: a warm, clear, friendly voice described in words.
+KHMER = re.compile(r"[\u1780-\u17ff\u19e0-\u19ff]")
+# Languages VoxCPM2 speaks; the others use Kokoro-82M (Apache 2.0), a separate, much faster English
+# voice. VIRGO_VOX_LANGS=km,en makes VoxCPM2 speak English too (with voice_en.wav when there is one).
+VOX_LANGS = set(os.environ.get("VIRGO_VOX_LANGS", "km").split(","))
+ENGLISH_VOICE = os.environ.get("VIRGO_ENGLISH_VOICE", "af_heart")  # a warm, clear Kokoro voice
 DEFAULT_DESCRIPTION = "A young woman, warm and friendly, bright clear voice, calm natural pace"
 
 
@@ -56,13 +62,15 @@ class VoxVoice:
             raise RuntimeError(f"Virgo voice: {ready['error']}")
         print("Virgo-1.0-Angkor-Voice is ready:", ready)
 
-    def __call__(self, text):
+    def __call__(self, text, lang=None):
+        """lang: "km" or "en" (worked out from the text when not given)."""
         import soundfile as sf
 
+        lang = lang or ("km" if KHMER.search(text) else "en")
         with self.lock:
             if self.worker.poll() is not None:
                 raise RuntimeError("the voice worker stopped")
-            self.worker.stdin.write(json.dumps({"text": text}, ensure_ascii=False) + "\n")
+            self.worker.stdin.write(json.dumps({"text": text, "lang": lang}, ensure_ascii=False) + "\n")
             self.worker.stdin.flush()
             answer = json.loads(self.worker.stdout.readline() or '{"error": "no answer"}')
         if "error" in answer:
@@ -108,12 +116,14 @@ def load_model(folder, device=None):
     return VoxCPM.from_pretrained(base, **kwargs)
 
 
-def voice_settings(folder):
-    """What to pass to generate(): the sample clip (and its words) when there is one, else a description."""
+def voice_settings(folder, lang="km"):
+    """What to pass to generate(): the sample clip (and its words) when there is one, else a description.
+    English uses voice_en.wav when it exists (a sample spoken in English sounds most natural)."""
+    name = "voice_en" if lang == "en" and os.path.exists(os.path.join(folder, "voice_en.wav")) else "voice"
     info = {}
-    if os.path.exists(os.path.join(folder, "voice.json")):
-        info = json.load(open(os.path.join(folder, "voice.json"), encoding="utf-8"))
-    sample = os.path.join(folder, "voice.wav")
+    if os.path.exists(os.path.join(folder, f"{name}.json")):
+        info = json.load(open(os.path.join(folder, f"{name}.json"), encoding="utf-8"))
+    sample = os.path.join(folder, f"{name}.wav")
     if os.path.exists(sample):
         settings = {"reference_wav_path": sample}
         if info.get("text"):  # the sample's exact words: the closest match to the sample's voice
@@ -134,22 +144,37 @@ def serve(folder):
 
         model = load_model(folder)
         accepted = set(inspect.signature(model._generate).parameters)  # older VoxCPM releases have no `seed`
-        settings, prefix = voice_settings(folder)
-        steps = int(os.environ.get("VIRGO_VOX_STEPS", "8"))  # fewer steps = faster (10 is VoxCPM's default)
+        voices = {lang: voice_settings(folder, lang) for lang in ("km", "en")}
+        steps = int(os.environ.get("VIRGO_VOX_STEPS", "6"))  # fewer steps = faster (10 is VoxCPM's default)
         rate = model.tts_model.sample_rate
+        english = None
+        if "en" not in VOX_LANGS:
+            try:
+                from kokoro import KPipeline
+
+                english = KPipeline(lang_code="a")  # American English
+            except Exception as err:  # not installed: VoxCPM2 speaks English too
+                print("Kokoro (English voice) unavailable, VoxCPM2 speaks English:", repr(err), file=sys.stderr)
     except Exception as err:
         print(json.dumps({"error": repr(err)}), flush=True)
         return
-    print(json.dumps({"rate": rate, "sample": bool(settings), "steps": steps}), flush=True)
+    print(json.dumps({"rate": rate, "sample": bool(voices["km"][0]), "steps": steps, "english": "kokoro" if english else "voxcpm2"}), flush=True)
     for line in sys.stdin:
         try:
-            text = json.loads(line)["text"]
-            random.seed(7); np.random.seed(7); torch.manual_seed(7)  # the same voice every time
-            args = {"cfg_value": 2.0, "inference_timesteps": steps, "seed": 7, **settings}
-            wave = model.generate(text=prefix + text, **{k: v for k, v in args.items() if k in accepted})
+            request = json.loads(line)
+            text, lang = request["text"], request.get("lang") or ("km" if KHMER.search(request["text"]) else "en")
+            if lang != "km" and english is not None:  # English: Kokoro, fast
+                wave = np.concatenate([np.asarray(audio, dtype=np.float32) for _, _, audio in english(text, voice=ENGLISH_VOICE)])
+                out_rate = 24000
+            else:
+                settings, prefix = voices["en" if lang == "en" else "km"]
+                random.seed(7); np.random.seed(7); torch.manual_seed(7)  # the same voice every time
+                args = {"cfg_value": 2.0, "inference_timesteps": steps, "seed": 7, **settings}
+                wave = model.generate(text=prefix + text, **{k: v for k, v in args.items() if k in accepted})
+                out_rate = rate
             fd, path = tempfile.mkstemp(suffix=".wav")
             os.close(fd)
-            sf.write(path, wave, rate)
+            sf.write(path, wave, out_rate)
             print(json.dumps({"path": path}), flush=True)
         except Exception as err:
             print(json.dumps({"error": repr(err)}), flush=True)
