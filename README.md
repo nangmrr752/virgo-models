@@ -108,8 +108,11 @@ Set `VIRGO_API_KEY` to require `Authorization: Bearer <key>` (WebSocket: `?key=<
 - **Chat:** add more examples to `chat/data/` (one JSON line per conversation, same format as
   `virgo_chat.jsonl`). A few hundred to a few thousand good examples make a big difference: Virgo's
   identity, common questions from your users, and plenty of natural Khmer. Run `scripts/check_data.py`, then train again.
-- **Khmer speech to text:** `python speech/finetune_stt.py` (FLEURS Khmer by default). Add your own
-  recordings with `--extra folder/` (audio files + `metadata.csv` with `file_name,sentence`).
+- **Virgo's own Khmer hearing:** open [`speech/train_hearing_kaggle.ipynb`](speech/train_hearing_kaggle.ipynb) on Kaggle and
+  **Save & Run All**. It fine-tunes Whisper large-v3-turbo with LoRA on OpenSLR 42 (plus FLEURS when it
+  loads) in about 3–5 hours, prints the Khmer error rate before and after, and saves `Virgo-1.0-Angkor-Hearing`
+  if it improved. The server notebooks then use it automatically. Add your own recordings with `--extra`
+  (audio files + `metadata.csv` with `file_name,sentence`).
 - **A Virgo image style:** train a LoRA on 20–50 images in your style with diffusers'
   `train_text_to_image_lora.py` on SD-Turbo's base, then pass `--lora` to `image/virgo_image.py`.
 - **Virgo's own Khmer voice:** open [`speech/train_voice_kaggle.ipynb`](speech/train_voice_kaggle.ipynb) on Kaggle and
