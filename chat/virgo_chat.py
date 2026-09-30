@@ -40,9 +40,12 @@ class VirgoChat:
         base = base or adapter_base(adapter) or DEFAULT_BASE
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.tok = AutoTokenizer.from_pretrained(adapter or base)
-        dtype = (torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16) if self.device == "cuda" else torch.float32
+        # bfloat16 only on GPUs that really have it (compute 8.0+): a T4 just emulates it, slowly.
+        real_bf16 = self.device == "cuda" and torch.cuda.get_device_capability(0)[0] >= 8
+        dtype = (torch.bfloat16 if real_bf16 else torch.float16) if self.device == "cuda" else torch.float32
         kwargs = {"dtype": dtype}
-        four_bit = wants_4bit(base)
+        # VIRGO_CHAT_4BIT=1: 4 bits for smaller models too (leaves GPU room for Virgo's voice on one T4).
+        four_bit = wants_4bit(base) or os.environ.get("VIRGO_CHAT_4BIT") == "1"
         if four_bit:
             from transformers import BitsAndBytesConfig
 
