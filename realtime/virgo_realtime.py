@@ -42,6 +42,7 @@ class Conversation:
     def __init__(self, chat, speech, vad):
         self.chat, self.speech, self.vad = chat, speech, vad
         self.history = []
+        self.language = None  # "khmer" when the page says the user speaks Khmer; None = pick Khmer or English
         self.buffer = np.zeros(0, np.float32)
         self.speaking_task = None
 
@@ -119,6 +120,9 @@ async def handle(ws, chat, speech, vad):
                 event = json.loads(message)
             except ValueError:
                 continue
+            # {"type": "language", "language": "km"}: the user chose Khmer, so hear only Khmer (no guessing).
+            if isinstance(event, dict) and event.get("type") == "language":
+                conv.language = {"km": "khmer", "en": "english"}.get(event.get("language"))
             if isinstance(event, dict) and event.get("type") == "greet" and not greeted:
                 greeted = True
                 conv.speaking_task = asyncio.create_task(greet(event.get("language")))
@@ -142,7 +146,7 @@ async def handle(ws, chat, speech, vad):
             audio = np.concatenate(utterance)
             talking, silent_for, utterance = False, 0.0, []
             try:
-                text = await asyncio.get_running_loop().run_in_executor(None, conv.speech.stt, {"raw": audio, "sampling_rate": RATE})
+                text = await asyncio.get_running_loop().run_in_executor(None, conv.speech.stt, {"raw": audio, "sampling_rate": RATE}, conv.language)
             except Exception as err:  # one bad turn never ends the conversation
                 print("Virgo realtime speech-to-text error:", repr(err))
                 await send("reply", text="Sorry, I didn't catch that. Please say it again.")
