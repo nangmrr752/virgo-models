@@ -1,4 +1,8 @@
 """Virgo 1.0 chat model: loads the base model and (if present) the Virgo LoRA adapter."""
+import json
+import os
+import re
+
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
 
@@ -9,23 +13,56 @@ SYSTEM = (
 )
 
 
+DEFAULT_BASE = "google/gemma-3-4b-it"
+BIG = re.compile(r"(\d+)b", re.I)
+
+
+def adapter_base(adapter):
+    """The base model a Virgo adapter was trained on (from its adapter_config.json)."""
+    try:
+        with open(os.path.join(adapter, "adapter_config.json"), encoding="utf-8") as f:
+            return json.load(f).get("base_model_name_or_path")
+    except (OSError, TypeError, ValueError):
+        return None
+
+
+def wants_4bit(base):
+    """12B and bigger load in 4 bits on a GPU, so Virgo-1.0-Angkor 12B fits a free 16 GB T4."""
+    flag = os.environ.get("VIRGO_4BIT")
+    if flag is not None:
+        return flag == "1"
+    sizes = [int(n) for n in BIG.findall(base.split("/")[-1])]
+    return torch.cuda.is_available() and bool(sizes) and max(sizes) >= 12
+
+
 class VirgoChat:
-    def __init__(self, base="google/gemma-3-4b-it", adapter=None):
+    def __init__(self, base=None, adapter=None):
+        base = base or adapter_base(adapter) or DEFAULT_BASE
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.tok = AutoTokenizer.from_pretrained(adapter or base)
         dtype = (torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16) if self.device == "cuda" else torch.float32
+        kwargs = {"dtype": dtype}
+        four_bit = wants_4bit(base)
+        if four_bit:
+            from transformers import BitsAndBytesConfig
+
+            kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=dtype)
+            kwargs["device_map"] = {"": 0}
         try:
-            model = AutoModelForCausalLM.from_pretrained(base, dtype=dtype)
+            model = AutoModelForCausalLM.from_pretrained(base, **kwargs)
         except ValueError:  # Gemma 3 4B and up are image+text models
             from transformers import Gemma3ForConditionalGeneration
 
-            model = Gemma3ForConditionalGeneration.from_pretrained(base, dtype=dtype)
+            model = Gemma3ForConditionalGeneration.from_pretrained(base, **kwargs)
         if adapter:
             from peft import PeftModel
 
             model = PeftModel.from_pretrained(model, adapter)
-        self.model = model.to(self.device).eval()
+        self.model = (model if four_bit else model.to(self.device)).eval()
         self.gemma = "gemma" in base.lower()
+        self.base = base
+        print(f"Virgo chat: {base}{' (4-bit)' if four_bit else ''}{' + ' + adapter if adapter else ''}")
 
     def _prompt(self, history, system=SYSTEM):
         # Gemma needs user/assistant turns to alternate: back-to-back turns from the same side (an

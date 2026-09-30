@@ -46,7 +46,7 @@ def score(item, answer):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--questions", default="chat/eval/questions.jsonl")
-    p.add_argument("--base", default="google/gemma-3-4b-it")
+    p.add_argument("--base", help="defaults to the adapter's own base (or Gemma 3 4B)")
     p.add_argument("--adapter", default="chat/out/virgo-1.0-chat-lora")
     p.add_argument("--answers", help="a .jsonl of {\"q\": ..., \"answer\": ...} to score instead of running the model")
     p.add_argument("--report", default="chat/eval/report.json")

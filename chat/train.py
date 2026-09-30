@@ -3,7 +3,7 @@
     pip install -r requirements.txt
     python chat/train.py                                  # Gemma 3 4B, uses chat/data/*.jsonl
     python chat/train.py --base google/gemma-3-1b-it      # lighter and faster, less smart
-    python chat/train.py --base google/gemma-3-12b-it     # smartest; needs a bigger GPU (24 GB+)
+    python chat/train.py --base google/gemma-3-12b-it     # smartest; 4 bits on a free T4 (Kaggle), ~1–3 h
 
 The 4B model is loaded in 4 bits (QLoRA) on a GPU, so it trains on a free Google Colab T4 in well
 under an hour for a few thousand examples. On a CPU, use the 1B model. The adapter is saved to chat/out/virgo-1.0-chat-lora; add --merge to also save
@@ -16,6 +16,7 @@ import argparse
 import glob
 import json
 import math
+import re
 
 import torch
 from datasets import Dataset
@@ -69,6 +70,7 @@ def main():
     p.add_argument("--rank", type=int, default=16)
     p.add_argument("--merge", action="store_true", help="also save a merged full model")
     p.add_argument("--full-precision", action="store_true", help="don't load the base in 4 bits (needs more GPU memory)")
+    p.add_argument("--batch", type=int, help="examples per step (default: 4, or 1 for 12B and up)")
     args = p.parse_args()
 
     tok = AutoTokenizer.from_pretrained(args.base)
@@ -98,12 +100,16 @@ def main():
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
     ))
     model.print_trainable_parameters()
+    # 12B and up: one example at a time (same effective batch of 16), 8-bit optimizer, so it fits a 16 GB T4.
+    big = max([int(n) for n in re.findall(r"(\d+)b", args.base.split("/")[-1].lower())] or [0]) >= 12
+    batch = args.batch or (1 if big else 4)
 
     Trainer(
         model=model,
         args=TrainingArguments(
             output_dir=args.out, num_train_epochs=args.epochs, learning_rate=args.lr,
-            per_device_train_batch_size=4, gradient_accumulation_steps=4,
+            per_device_train_batch_size=batch, gradient_accumulation_steps=max(1, 16 // batch),
+            optim="paged_adamw_8bit" if four_bit and big else "adamw_torch",
             # warmup_steps works on every transformers version (warmup_ratio was removed in newer ones)
             warmup_steps=max(1, int(0.05 * math.ceil(len(ds) / 16) * args.epochs)),
             logging_steps=10, save_strategy="no", report_to=[],
