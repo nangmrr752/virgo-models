@@ -83,12 +83,21 @@ def load_model(folder, device=None):
 
     base = BASE if os.path.isdir(BASE) else snapshot_download(BASE)
     device = device or os.environ.get("VIRGO_VOX_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
-    if device.startswith("cuda") and not torch.cuda.is_bf16_supported():
+    # bfloat16 needs an Ampere GPU (compute 8.0+); a T4 (7.5) only emulates it, very slowly. Newer torch
+    # reports emulated support as "supported", so check the GPU itself. VoxCPM2's config.json has no
+    # dtype when it's the bfloat16 default, so it's written out. VIRGO_VOX_DTYPE overrides.
+    dtype = os.environ.get("VIRGO_VOX_DTYPE")
+    if not dtype and device.startswith("cuda"):
+        index = int(device.split(":")[1]) if ":" in device else 0
+        dtype = "float16" if torch.cuda.get_device_capability(index)[0] < 8 else None
+    if dtype:
         config_path = os.path.join(base, "config.json")
         config = json.load(open(config_path))
-        if str(config.get("dtype", "")).lower() in ("bfloat16", "bf16"):
-            config["dtype"] = "float16"
-            json.dump(config, open(config_path, "w"), indent=2)
+        if config.get("dtype") != dtype:
+            config["dtype"] = dtype
+            text = json.dumps(config, indent=2)
+            os.remove(config_path)  # a link into the download cache: replace it, don't write through it
+            open(config_path, "w").write(text)
     lora = folder if os.path.exists(os.path.join(folder, "lora_config.json")) else None
     return VoxCPM.from_pretrained(base, load_denoiser=False, device=device, lora_weights_path=lora)
 
