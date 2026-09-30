@@ -58,6 +58,49 @@ def fleurs(work):
     return read_extra(folder)
 
 
+TEXT_COLUMNS = ["sentence", "transcription", "transcript", "text", "normalized_text", "raw_transcription", "label"]
+
+
+def hf_dataset(work, spec, limit=20000):
+    """Any Hugging Face speech dataset ("name" or "name:split"): its audio and transcript columns are
+    found automatically. Audio is saved as it is (no decoding here), so any format librosa reads works."""
+    from datasets import Audio, load_dataset
+
+    name, _, split = spec.partition(":")
+    folder = os.path.join(work, "hf", name.replace("/", "__") + (f"__{split}" if split else ""))
+    index = os.path.join(folder, "metadata.csv")
+    if not os.path.exists(index):
+        try:
+            rows = load_dataset(name, split=split or "train")
+        except Exception as err:
+            print(f"{spec} skipped: {type(err).__name__}: {str(err)[:200]}")
+            return []
+        audio = next((c for c, f in rows.features.items() if isinstance(f, Audio)), None)
+        text = next((c for c in TEXT_COLUMNS if c in rows.column_names), None)
+        if not audio or not text:
+            print(f"{spec} skipped: no audio or transcript column (columns: {rows.column_names})")
+            return []
+        rows = rows.cast_column(audio, Audio(decode=False)).select_columns([audio, text])
+        os.makedirs(folder, exist_ok=True)
+        with open(index, "w", encoding="utf-8", newline="") as f:
+            out = csv.writer(f)
+            out.writerow(["file_name", "sentence"])
+            for i, row in enumerate(rows):
+                if i >= limit:
+                    break
+                clip, sentence = row[audio], str(row[text] or "").strip()
+                data = clip.get("bytes") or (open(clip["path"], "rb").read() if clip.get("path") and os.path.exists(clip["path"]) else None)
+                if not data or not sentence:
+                    continue
+                ext = os.path.splitext(clip.get("path") or "")[1] or ".wav"
+                file_name = f"{i:06d}{ext}"
+                with open(os.path.join(folder, file_name), "wb") as w:
+                    w.write(data)
+                out.writerow([file_name, sentence])
+        print(f"✅ {spec}: saved {sum(1 for _ in open(index, encoding='utf-8')) - 1} clips")
+    return read_extra(folder)
+
+
 def cer(ref, hyp):
     """Character error rate, ignoring spaces (Khmer doesn't put spaces between words)."""
     a, b = ref.replace(" ", ""), hyp.replace(" ", "")
@@ -124,6 +167,9 @@ def main():
     p.add_argument("--extra", help="your own recordings: .wav files + metadata.csv (file_name,sentence)")
     p.add_argument("--no-slr42", action="store_true")
     p.add_argument("--no-fleurs", action="store_true")
+    p.add_argument("--hf", action="append", default=[], metavar="NAME[:SPLIT]",
+                   help="also train on a Hugging Face Khmer speech dataset (repeat for more); check its license first")
+    p.add_argument("--hf-max", type=int, default=20000, help="at most this many clips from each --hf dataset")
     p.add_argument("--steps", type=int, default=2000)
     p.add_argument("--batch", type=int, default=8)
     p.add_argument("--lr", type=float, default=1e-4, help="LoRA learning rate (use ~1e-5 with --full)")
@@ -140,6 +186,8 @@ def main():
         rows += [(path, text) for _, path, text in download_slr42(args.work)]
     if not args.no_fleurs:
         rows += fleurs(args.work)
+    for spec in args.hf:
+        rows += hf_dataset(args.work, spec, args.hf_max)
     if args.extra:
         rows += read_extra(args.extra)
     if len(rows) < 20:
