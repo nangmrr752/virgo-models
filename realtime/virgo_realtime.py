@@ -38,6 +38,51 @@ GREETINGS = {
 SENTENCE_END = re.compile(r"(?<=[.!?។៕\n])\s")
 
 
+# ---------- Web search (through the Virgo AI website, which holds the search keys) ----------
+SEARCH_URL = os.environ.get("VIRGO_SEARCH_URL", "https://virgoai.camksn.com/api/virgo-search")
+CURRENT = re.compile(r"\b(today|tonight|tomorrow|yesterday|now|current(ly)?|latest|recent(ly)?|news|this (week|month|year)|right now|live|score|won|winner|price|cost|exchange rate|rate|weather|forecast|stock|election|president|prime minister|ceo|release(d)?|update|trending|open now|schedule|20[2-9]\d)\b", re.I)
+KM_CURRENT = re.compile(r"(ថ្ងៃនេះ|ឥឡូវ|បច្ចុប្បន្ន|ចុងក្រោយ|ព័ត៌មាន|តម្លៃ|អាកាសធាតុ|អត្រាប្ដូរប្រាក់|អត្រា|ឆ្នាំនេះ|សប្ដាហ៍នេះ|ខែនេះ|ម្សិលមិញ|ថ្ងៃស្អែក|ពិន្ទុ|ឈ្នះ)")
+UNSURE = re.compile(r"turn on \**search|i (don't|do not) know (live|the latest|today)|i can'?t (see|check) (live|today|the latest|current)|(don't|do not|can't|cannot) (have |access )?(real[- ]time|current|live|up[- ]to[- ]date)|បើក \**Search|ខ្ញុំមិនអាចមើល|ខ្ញុំមិនដឹង(លទ្ធផល|ព័ត៌មាន)ផ្ទាល់", re.I)
+
+
+def wants_search(question):
+    return bool(CURRENT.search(question) or KM_CURRENT.search(question))
+
+
+def sounds_unsure(answer):
+    return bool(UNSURE.search(answer or ""))
+
+
+def web_search(query):
+    """The website's search: a short text of what it found, or None (no key, offline, nothing found)."""
+    import urllib.request
+
+    key = os.environ.get("VIRGO_API_KEY")
+    if not key or not SEARCH_URL:
+        return None
+    try:
+        req = urllib.request.Request(SEARCH_URL, method="POST", data=json.dumps({"query": query[:300]}).encode(),
+                                     headers={"content-type": "application/json", "authorization": f"Bearer {key}"})
+        body = json.loads(urllib.request.urlopen(req, timeout=15).read())
+    except Exception as err:
+        print("Virgo realtime search failed:", repr(err))
+        return None
+    parts = [f"Summary: {body['summary']}"] if body.get("summary") else []
+    for r in (body.get("results") or [])[:3]:
+        parts.append(f"- {r.get('title', '')} ({r.get('url', '')}): {(r.get('text') or r.get('snippet') or '')[:1200]}")
+    return "\n".join(parts) or None
+
+
+def with_results(history, found):
+    """The history, with the search results added to the last question (the history itself stays plain)."""
+    if not found:
+        return history
+    last = history[-1]
+    note = ("Web search results (current). Answer from them, briefly and in the user's language, and "
+            f"say the source's name:\n{found}\n\nQuestion: {last['content']}")
+    return history[:-1] + [{**last, "content": note}]
+
+
 class Conversation:
     def __init__(self, chat, speech, vad):
         self.chat, self.speech, self.vad = chat, speech, vad
@@ -70,30 +115,46 @@ async def handle(ws, chat, speech, vad):
             await send("reply", text="Sorry, something went wrong on my side. Please say that again.")
             await send("state", state="listening")
 
+    async def say(history, spoken):
+        """Streams one answer, speaking each sentence as soon as it's written; `spoken` keeps the text."""
+        loop = asyncio.get_running_loop()
+        pending = ""
+        stream = conv.chat.stream(history)
+        await send("state", state="speaking")
+        while True:
+            piece = await loop.run_in_executor(None, next, stream, None)
+            if piece is None:
+                break
+            pending += piece
+            spoken["text"] += piece
+            await send("reply", text=spoken["text"])
+            *done, pending = SENTENCE_END.split(pending)
+            for sentence in done:
+                await speak(sentence)
+        if pending.strip():
+            await speak(pending)
+        return spoken["text"]
+
     async def reply_to(text):
         await send("state", state="thinking")
         conv.history.append({"role": "user", "content": text})
         loop = asyncio.get_running_loop()
-        pending, full = "", ""
+        spoken = {"text": ""}
         try:
-            stream = conv.chat.stream(conv.history)
-            await send("state", state="speaking")
-            while True:
-                piece = await loop.run_in_executor(None, next, stream, None)
-                if piece is None:
-                    break
-                pending += piece
-                full += piece
-                await send("reply", text=full)
-                *done, pending = SENTENCE_END.split(pending)
-                for sentence in done:
-                    await speak(sentence)
-            if pending.strip():
-                await speak(pending)
+            # Questions about now (news, prices, weather…) are looked up first.
+            found = await loop.run_in_executor(None, web_search, text) if wants_search(text) else None
+            full = await say(with_results(conv.history, found), spoken)
+            # Virgo said it can't know: look it up and answer again.
+            if not found and sounds_unsure(full):
+                found = await loop.run_in_executor(None, web_search, text)
+                if found:
+                    spoken["text"] = ""
+                    await send("state", state="thinking")
+                    await say(with_results(conv.history, found), spoken)
         finally:
             # Keep what Virgo said, even when interrupted or failed, so turns stay user/assistant.
-            if full.strip():
-                conv.history.append({"role": "assistant", "content": full.strip()})
+            if spoken["text"].strip():
+                conv.history.append({"role": "assistant", "content": spoken["text"].strip()})
         await send("state", state="listening")
 
     async def speak(sentence):
