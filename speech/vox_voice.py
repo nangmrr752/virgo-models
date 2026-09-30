@@ -55,12 +55,26 @@ class VoxVoice:
                 print("Virgo voice sample not downloaded, using the described voice:", err)
         python = os.environ.get("VIRGO_VOX_PYTHON", sys.executable)
         self.lock = threading.Lock()
+        # The worker's messages (and errors) go to a log file, so a crash says why.
+        self.log_path = os.path.join(tempfile.gettempdir(), "virgo-voice-worker.log")
+        log = open(self.log_path, "w")
         self.worker = subprocess.Popen([python, os.path.abspath(__file__), "--serve", folder],
-                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8")
-        ready = json.loads(self.worker.stdout.readline() or '{"error": "the voice worker stopped"}')
-        if "error" in ready:
-            raise RuntimeError(f"Virgo voice: {ready['error']}")
+                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log, text=True, encoding="utf-8")
+        ready = json.loads(self.worker.stdout.readline() or "{}")
+        if "error" in ready or not ready:
+            raise RuntimeError(f"Virgo voice: {ready.get('error') or self.why_stopped()}")
         print("Virgo-1.0-Angkor-Voice is ready:", ready)
+
+    def why_stopped(self):
+        """Why the worker ended: killed for memory, or the last lines it printed."""
+        try:
+            code = self.worker.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            code = None
+        tail = "".join(open(self.log_path, errors="replace").readlines()[-15:]).strip()
+        if code in (-9, 137):
+            return f"the voice worker was killed (exit {code}): out of memory (RAM). Last lines:\n{tail}"
+        return f"the voice worker stopped (exit {code}). Last lines:\n{tail}"
 
     def __call__(self, text, lang=None):
         """lang: "km" or "en" (worked out from the text when not given)."""
@@ -69,7 +83,7 @@ class VoxVoice:
         lang = lang or ("km" if KHMER.search(text) else "en")
         with self.lock:
             if self.worker.poll() is not None:
-                raise RuntimeError("the voice worker stopped")
+                raise RuntimeError(f"Virgo voice: {self.why_stopped()}")
             self.worker.stdin.write(json.dumps({"text": text, "lang": lang}, ensure_ascii=False) + "\n")
             self.worker.stdin.flush()
             answer = json.loads(self.worker.stdout.readline() or '{"error": "no answer"}')
