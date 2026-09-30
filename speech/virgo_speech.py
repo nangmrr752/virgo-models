@@ -5,7 +5,7 @@
     python speech/virgo_speech.py tts "សួស្តី ខ្ញុំឈ្មោះ Virgo" out.wav
 
 STT uses Whisper: Virgo's fine-tuned copy (speech/out/virgo-1.0-stt, from finetune_stt.py) when it
-exists, otherwise openai/whisper-large-v3-turbo on a GPU (whisper-small on a CPU). TTS speaks Khmer with Meta MMS (facebook/mms-tts-khm) and
+exists, otherwise openai/whisper-large-v3-turbo on a GPU (whisper-small on a CPU). TTS speaks Khmer with Virgo's own voice (khmer_voice.py, trained by train_voice.py) when it's set up, otherwise Meta MMS (facebook/mms-tts-khm), and
 other text with Kokoro-82M (English, natural voices). Both run on a CPU.
 """
 import argparse
@@ -118,9 +118,30 @@ class VirgoSpeech:
         return wave.astype(np.float32), model.config.sampling_rate
 
     def _khmer(self, text):
+        # Virgo's own Khmer voice (speech/train_voice.py, commercial-safe) when it's set up; otherwise
+        # Meta MMS, which is non-commercial (CC BY-NC 4.0).
         if self._khmer_tts is None:
-            self._khmer_tts = self._mms("facebook/mms-tts-khm")
-        return self._speak_mms(self._khmer_tts, text)
+            self._khmer_tts = self._own_khmer_voice() or ("mms", self._mms("facebook/mms-tts-khm"))
+        kind, engine = self._khmer_tts
+        if kind == "virgo":
+            try:
+                return engine(text)
+            except Exception as err:
+                print("Virgo's Khmer voice failed, using MMS for now:", err)
+                self._khmer_tts = ("mms", self._mms("facebook/mms-tts-khm"))
+                return self._speak_mms(self._khmer_tts[1], text)
+        return self._speak_mms(engine, text)
+
+    @staticmethod
+    def _own_khmer_voice():
+        try:
+            import khmer_voice
+
+            if khmer_voice.available():
+                return ("virgo", khmer_voice.KhmerVoice())
+        except Exception as err:
+            print("Virgo's own Khmer voice isn't available, using MMS:", err)
+        return None
 
     def _english(self, text, voice):
         # Kokoro sounds most natural; where it can't be installed (e.g. Python 3.13 on Colab), Meta's
