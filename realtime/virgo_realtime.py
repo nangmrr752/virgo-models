@@ -8,7 +8,8 @@ How it works (one conversation per connection):
      so you hear the start of the answer while the rest is still being written.
   5. Talking while Virgo speaks interrupts it.
 
-Messages to the page: JSON text {"type": "heard"|"reply"|"state", ...} and binary audio
+Messages from the page: binary audio, or JSON {"type": "greet", "language": "km"|"en"} so Virgo says
+hello first. Messages to the page: JSON text {"type": "heard"|"reply"|"state", ...} and binary audio
 (16-bit PCM WAV bytes, one per sentence).
 
     python realtime/virgo_realtime.py            # ws://localhost:8765
@@ -30,6 +31,10 @@ from virgo_speech import VirgoSpeech  # noqa: E402
 
 RATE = 16000
 SILENCE_S = 0.6
+GREETINGS = {
+    "en": "Hello! I'm Virgo AI. How can I help you?",
+    "km": "សួស្តី! ខ្ញុំជា Virgo AI។ តើខ្ញុំអាចជួយអ្វីបាន?",
+}
 SENTENCE_END = re.compile(r"(?<=[.!?។៕\n])\s")
 
 
@@ -98,9 +103,25 @@ async def handle(ws, chat, speech, vad):
         sf.write(out, wave, rate, format="WAV", subtype="PCM_16")
         await ws.send(out.getvalue())
 
+    async def greet(language):
+        text = GREETINGS.get(language, GREETINGS["en"])
+        await send("state", state="speaking")
+        await send("reply", text=text)
+        await speak(text)
+        await send("state", state="listening")
+
     await send("state", state="listening")
+    greeted = False
     async for message in ws:
         if isinstance(message, str):
+            # {"type": "greet", "language": "km" | "en"}: the page asks Virgo to say hello first.
+            try:
+                event = json.loads(message)
+            except ValueError:
+                continue
+            if isinstance(event, dict) and event.get("type") == "greet" and not greeted:
+                greeted = True
+                conv.speaking_task = asyncio.create_task(greet(event.get("language")))
             continue
         samples = np.frombuffer(message, np.int16).astype(np.float32) / 32768
         voice = conv.speech_prob(samples) > 0.5

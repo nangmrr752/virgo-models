@@ -18,10 +18,13 @@ import random
 import sys
 from dataclasses import dataclass
 
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")  # one GPU: on "T4 x2" the Trainer would split batches across both
+
 import numpy as np
 import torch
 
 sys.path.insert(0, os.path.dirname(__file__))
+MAX_LABEL_TOKENS = 440  # Whisper's decoder takes at most 448 tokens, including its start tokens
 RATE = 16000
 
 
@@ -148,6 +151,13 @@ def main():
 
     gpu = torch.cuda.is_available()
     processor = WhisperProcessor.from_pretrained(args.base, language="khmer", task="transcribe")
+    # Khmer text uses many tokens: drop clips whose transcript is too long for Whisper's decoder.
+    fits = lambda text: len(processor.tokenizer(text).input_ids) <= MAX_LABEL_TOKENS
+    kept = [r for r in train if fits(r[1])]
+    evals = [r for r in evals if fits(r[1])]
+    if len(kept) < len(train):
+        print(f"Skipped {len(train) - len(kept)} clips with transcripts too long for Whisper")
+    train = kept
     model = WhisperForConditionalGeneration.from_pretrained(args.base, dtype=torch.float32)
     model.generation_config.forced_decoder_ids = None
     if gpu:
