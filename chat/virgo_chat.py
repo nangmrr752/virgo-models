@@ -94,11 +94,11 @@ class VirgoChat:
         out = self.model.generate(**inputs, max_new_tokens=max_new_tokens, **sampling)
         return self.tok.decode(out[0, inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
 
-    def stream(self, history, max_new_tokens=512, temperature=0.7):
+    def stream(self, history, max_new_tokens=512, temperature=0.7, system=SYSTEM):
         """Yields the reply piece by piece (used by the realtime voice so it can speak early)."""
         from threading import Thread
 
-        inputs = self._prompt(history)
+        inputs = self._prompt(history, system)
         streamer = TextIteratorStreamer(self.tok, skip_prompt=True, skip_special_tokens=True)
         sampling = {"do_sample": True, "temperature": temperature, "top_p": 0.9} if temperature > 0 else {"do_sample": False}
         Thread(target=self.model.generate, kwargs=dict(**inputs, max_new_tokens=max_new_tokens, streamer=streamer, **sampling)).start()

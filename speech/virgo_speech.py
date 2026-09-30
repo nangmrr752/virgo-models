@@ -99,10 +99,30 @@ class VirgoSpeech:
 
     # ---------- Text to speech ----------
     def tts(self, text, voice="af_heart"):
-        """Text → (samples float32, sample_rate). Khmer text uses the Khmer voice."""
+        """Text → (samples float32, sample_rate). Virgo-1.0-Angkor-Voice (VoxCPM2, vox_voice.py) speaks
+        every language when it's set up; otherwise Khmer text uses the Khmer voice and English Kokoro."""
+        vox = self._vox_voice()
+        if vox:
+            try:
+                return vox(text)
+            except Exception as err:
+                print("Virgo-1.0-Angkor-Voice failed, using the other voices for now:", err)
+                self._vox = False
         if KHMER.search(text):
             return self._khmer(text)
         return self._english(text, voice)
+
+    def _vox_voice(self):
+        if getattr(self, "_vox", None) is None:
+            self._vox = False
+            try:
+                import vox_voice
+
+                if vox_voice.available():
+                    self._vox = vox_voice.VoxVoice()
+            except Exception as err:
+                print("Virgo-1.0-Angkor-Voice isn't available:", err)
+        return self._vox
 
     @staticmethod
     def _mms(name):

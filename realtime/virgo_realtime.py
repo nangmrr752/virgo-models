@@ -30,12 +30,48 @@ from virgo_chat import VirgoChat  # noqa: E402
 from virgo_speech import VirgoSpeech  # noqa: E402
 
 RATE = 16000
-SILENCE_S = 0.6
+SILENCE_S = 0.8     # a pause this long ends your turn (Khmer sentences often pause mid-way)
+MIN_SPEECH_S = 0.35  # shorter sounds (a cough, a click) are ignored
+FIRST_CHUNK = 60    # characters: the first words are spoken as soon as a phrase this long is ready
+MAX_VOICE_TOKENS = 220
+# Spoken answers: short and conversational, so Virgo starts talking sooner and sounds natural.
+VOICE_SYSTEM = (
+    "You are Virgo, an AI assistant made by KSN (Virgo-1.0-Angkor), talking with the user by voice. "
+    "Reply in the user's language: Khmer (in Khmer script) when they speak Khmer, otherwise English. "
+    "Answer in one to three short spoken sentences, like a friendly person on the phone: no lists, "
+    "no markdown, no emoji. Offer more detail only if they ask. Say so when you are not sure."
+)
+CHECKING = {"en": "Let me check.", "km": "សូមចាំបន្តិច ខ្ញុំរកមើលសិន។"}
+# What Whisper tends to "hear" in silence or noise: skipped instead of answered.
+NOISE = re.compile(r"^(?:thank you for watching|thanks for watching|you|\W*|(?P<c>.)(?P=c){5,}.*)[.!。។]*$", re.I)
 GREETINGS = {
     "en": "Hello! I'm Virgo AI. How can I help you?",
     "km": "សួស្តី! ខ្ញុំជា Virgo AI។ តើខ្ញុំអាចជួយអ្វីបាន?",
 }
 SENTENCE_END = re.compile(r"(?<=[.!?។៕\n])\s")
+COMMA = re.compile(r"[,;:、،]\s*")
+SPACE = re.compile(r"\s+")
+
+
+def heard_nothing(text):
+    """True for empty or noise-like transcripts (Whisper's usual guesses on silence)."""
+    t = (text or "").strip()
+    return len(t) < 2 or bool(NOISE.match(t))
+
+
+def first_phrase(pending):
+    """Splits off an early phrase (at a comma or space) once the first words are long enough."""
+    if len(pending) < FIRST_CHUNK:
+        return None, pending
+    cut = None
+    for pattern in (COMMA, SPACE):  # a comma is the most natural place to pause
+        for m in pattern.finditer(pending, 20):
+            cut = m.end()
+        if cut:
+            break
+    if not cut or cut >= len(pending):
+        return None, pending
+    return pending[:cut], pending[cut:]
 
 
 # ---------- Web search (through the Virgo AI website, which holds the search keys) ----------
@@ -83,6 +119,9 @@ def with_results(history, found):
     return history[:-1] + [{**last, "content": note}]
 
 
+KHMER_TEXT = re.compile(r"[\u1780-\u17ff]")
+
+
 class Conversation:
     def __init__(self, chat, speech, vad):
         self.chat, self.speech, self.vad = chat, speech, vad
@@ -119,7 +158,8 @@ async def handle(ws, chat, speech, vad):
         """Streams one answer, speaking each sentence as soon as it's written; `spoken` keeps the text."""
         loop = asyncio.get_running_loop()
         pending = ""
-        stream = conv.chat.stream(history)
+        stream = conv.chat.stream(history, max_new_tokens=MAX_VOICE_TOKENS, system=VOICE_SYSTEM)
+        spoke = False
         await send("state", state="speaking")
         while True:
             piece = await loop.run_in_executor(None, next, stream, None)
@@ -129,7 +169,11 @@ async def handle(ws, chat, speech, vad):
             spoken["text"] += piece
             await send("reply", text=spoken["text"])
             *done, pending = SENTENCE_END.split(pending)
+            if not done and not spoke:  # nothing finished yet: say the first phrase now
+                phrase, pending = first_phrase(pending)
+                done = [phrase] if phrase else []
             for sentence in done:
+                spoke = True
                 await speak(sentence)
         if pending.strip():
             await speak(pending)
@@ -141,8 +185,14 @@ async def handle(ws, chat, speech, vad):
         loop = asyncio.get_running_loop()
         spoken = {"text": ""}
         try:
-            # Questions about now (news, prices, weather…) are looked up first.
-            found = await loop.run_in_executor(None, web_search, text) if wants_search(text) else None
+            # Questions about now (news, prices, weather…) are looked up first; Virgo says it's
+            # checking while the search runs, so there's no silence.
+            found = None
+            if wants_search(text):
+                lookup = loop.run_in_executor(None, web_search, text)
+                await send("state", state="speaking")
+                await speak(CHECKING["km" if KHMER_TEXT.search(text) else "en"])
+                found = await lookup
             full = await say(with_results(conv.history, found), spoken)
             # Virgo said it can't know: look it up and answer again.
             if not found and sounds_unsure(full):
@@ -206,6 +256,8 @@ async def handle(ws, chat, speech, vad):
         if talking and silent_for >= SILENCE_S:
             audio = np.concatenate(utterance)
             talking, silent_for, utterance = False, 0.0, []
+            if len(audio) / RATE - SILENCE_S < MIN_SPEECH_S:
+                continue
             try:
                 text = await asyncio.get_running_loop().run_in_executor(None, conv.speech.stt, {"raw": audio, "sampling_rate": RATE}, conv.language)
             except Exception as err:  # one bad turn never ends the conversation
@@ -213,7 +265,7 @@ async def handle(ws, chat, speech, vad):
                 await send("reply", text="Sorry, I didn't catch that. Please say it again.")
                 await send("state", state="listening")
                 continue
-            if text:
+            if text and not heard_nothing(text):
                 await send("heard", text=text)
                 conv.speaking_task = asyncio.create_task(answer(text))
 
