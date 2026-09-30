@@ -34,9 +34,11 @@ _models = {}
 @app.on_event("startup")
 def preload():
     """VIRGO_PRELOAD=chat,speech loads those models at start, so the first request isn't slow."""
-    for name in filter(None, os.environ.get("VIRGO_PRELOAD", "").split(",")):
-        load(name.strip())
-        if name.strip() == "speech":
+    names = [n.strip() for n in os.environ.get("VIRGO_PRELOAD", "").split(",") if n.strip()]
+    # Speech (and Virgo's voice) first: the voice needs the most free memory while it loads.
+    for name in sorted(names, key=lambda n: n != "speech"):
+        load(name)
+        if name == "speech":
             # Start Virgo-1.0-Angkor-Voice now: the log says right away whether it works, and the
             # first answer isn't slow.
             voice = _models["speech"]._vox_voice()

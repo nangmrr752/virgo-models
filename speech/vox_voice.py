@@ -99,7 +99,13 @@ def load_model(folder, device=None):
             os.remove(config_path)  # a link into the download cache: replace it, don't write through it
             open(config_path, "w").write(text)
     lora = folder if os.path.exists(os.path.join(folder, "lora_config.json")) else None
-    return VoxCPM.from_pretrained(base, load_denoiser=False, device=device, lora_weights_path=lora)
+    kwargs = {"load_denoiser": False, "device": device, "lora_weights_path": lora}
+    # VIRGO_VOX_OPTIMIZE=0 skips torch.compile: less memory while loading (Colab's 12 GB), a bit slower.
+    import inspect
+
+    if os.environ.get("VIRGO_VOX_OPTIMIZE") == "0" and "optimize" in inspect.signature(VoxCPM.from_pretrained).parameters:
+        kwargs["optimize"] = False
+    return VoxCPM.from_pretrained(base, **kwargs)
 
 
 def voice_settings(folder):
