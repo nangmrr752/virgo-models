@@ -11,7 +11,7 @@ from virgo_chat import VirgoChat
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--base", default="google/gemma-3-4b-it")
+    p.add_argument("--base", help="defaults to the adapter's own base (or Gemma 3 4B)")
     p.add_argument("--adapter", default="chat/out/virgo-1.0-chat-lora")
     args = p.parse_args()
     bot = VirgoChat(args.base, args.adapter if os.path.isdir(args.adapter) else None)
