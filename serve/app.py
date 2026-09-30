@@ -36,6 +36,11 @@ def preload():
     """VIRGO_PRELOAD=chat,speech loads those models at start, so the first request isn't slow."""
     for name in filter(None, os.environ.get("VIRGO_PRELOAD", "").split(",")):
         load(name.strip())
+        if name.strip() == "speech":
+            # Start Virgo-1.0-Angkor-Voice now: the log says right away whether it works, and the
+            # first answer isn't slow.
+            voice = _models["speech"]._vox_voice()
+            print("🗣️ Voice:", "Virgo-1.0-Angkor-Voice (VoxCPM2)" if voice else "fallback voices (MMS / Kokoro): Virgo-1.0-Angkor-Voice isn't set up or didn't start")
 
 
 def load(name):
