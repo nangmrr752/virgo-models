@@ -6,7 +6,7 @@ small open model, tuned or set up to be Virgo: its name, its tone, English and K
 | # | Ability | Virgo 1.0 part | Built on (open model) | Runs on |
 |---|---|---|---|---|
 | 1 | **Chat** | `chat/` | Gemma 3 4B + Virgo LoRA (trained here; 1B lighter, 12B smarter) | GPU, CPU (slow), Workers AI LoRA*, browser* |
-| 2 | **Text to speech** | `speech/virgo_speech.py tts` | Virgo's own Khmer voice (VITS, trained here on OpenSLR 42; MMS-TTS until trained) · Kokoro-82M (English) | CPU, GPU |
+| 2 | **Text to speech** | `speech/virgo_speech.py tts` | **Virgo-1.0-Angkor-Voice** on VoxCPM2 (Khmer, English and 28 more; designed with `speech/design_voice.ipynb`) · older fallbacks: Virgo's VITS Khmer voice / MMS-TTS, Kokoro-82M (English) | CPU, GPU |
 | 3 | **Speech to text** | `speech/virgo_speech.py stt` | Whisper large-v3-turbo on a GPU (small on a CPU; small can be fine-tuned for Khmer here) | CPU, GPU |
 | 4 | **Transcribe** | `speech/virgo_speech.py transcribe` | the same Whisper, long audio + timestamps + `.srt` | CPU, GPU |
 | 5 | **Realtime speech to speech** | `realtime/` | VAD → Virgo STT → Virgo chat → Virgo TTS, streamed | GPU (best), CPU |
@@ -115,7 +115,11 @@ Set `VIRGO_API_KEY` to require `Authorization: Bearer <key>` (WebSocket: `?key=<
   (audio files + `metadata.csv` with `file_name,sentence`).
 - **A Virgo image style:** train a LoRA on 20–50 images in your style with diffusers'
   `train_text_to_image_lora.py` on SD-Turbo's base, then pass `--lora` to `image/virgo_image.py`.
-- **Virgo's own Khmer voice:** open [`speech/train_voice_kaggle.ipynb`](speech/train_voice_kaggle.ipynb) on Kaggle and
+- **Virgo's voice (Virgo-1.0-Angkor-Voice):** open [`speech/design_voice.ipynb`](speech/design_voice.ipynb) on Kaggle or
+  Colab, describe a voice in words, listen to a few takes and pick one; it's saved to Hugging Face and the
+  server notebooks use it for every language. An optional LoRA step makes it steadier (use a real speaker's
+  recordings only with their permission).
+- **Older Khmer voice (VITS):** open [`speech/train_voice_kaggle.ipynb`](speech/train_voice_kaggle.ipynb) on Kaggle and
   **Save & Run All**. It trains a VITS voice from scratch on OpenSLR 42 (commercial-safe), about 11 hours per run.
   Each run continues the last one, and a clear voice takes 3–5 runs. The server notebooks then use it
   for Khmer automatically. Add 1–2 hours of one speaker's recordings (`--extra`) for a unique voice.
@@ -129,6 +133,7 @@ Virgo's own code here is yours. Each base model keeps its own license:
 | Gemma 3 (1B, 4B, 12B) | [Gemma Terms of Use](https://ai.google.dev/gemma/terms): accept on Hugging Face before downloading |
 | Whisper | MIT |
 | Kokoro-82M | Apache 2.0 |
+| VoxCPM2 (Virgo-1.0-Angkor-Voice's base) | Apache 2.0: free for commercial use; credit "built on VoxCPM2 by OpenBMB" |
 | MMS-TTS (Khmer) | CC BY-NC 4.0: **non-commercial**. Only the fallback until Virgo's own voice is trained. |
 | Virgo's Khmer voice (trained here) | Your model. Training data OpenSLR 42 is CC BY-SA 4.0: credit "Khmer speech data by Google (OpenSLR 42)". Code: coqui-tts (MPL 2.0). |
 | SD-Turbo | Stability AI license: check its model card for your use |
