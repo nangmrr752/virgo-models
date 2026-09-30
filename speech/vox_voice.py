@@ -111,7 +111,14 @@ def serve(folder):
     import soundfile as sf
 
     try:
+        import inspect
+        import random
+
+        import numpy as np
+        import torch
+
         model = load_model(folder)
+        accepted = set(inspect.signature(model._generate).parameters)  # older VoxCPM releases have no `seed`
         settings, prefix = voice_settings(folder)
         steps = int(os.environ.get("VIRGO_VOX_STEPS", "8"))  # fewer steps = faster (10 is VoxCPM's default)
         rate = model.tts_model.sample_rate
@@ -122,7 +129,9 @@ def serve(folder):
     for line in sys.stdin:
         try:
             text = json.loads(line)["text"]
-            wave = model.generate(text=prefix + text, cfg_value=2.0, inference_timesteps=steps, seed=7, **settings)
+            random.seed(7); np.random.seed(7); torch.manual_seed(7)  # the same voice every time
+            args = {"cfg_value": 2.0, "inference_timesteps": steps, "seed": 7, **settings}
+            wave = model.generate(text=prefix + text, **{k: v for k, v in args.items() if k in accepted})
             fd, path = tempfile.mkstemp(suffix=".wav")
             os.close(fd)
             sf.write(path, wave, rate)
