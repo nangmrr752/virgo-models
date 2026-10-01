@@ -26,6 +26,20 @@ Open the link → **Runtime → Change runtime type → T4 GPU** → **Runtime �
 
 **Smarter Virgo (12B):** open [`chat/train_kaggle.ipynb`](chat/train_kaggle.ipynb) on Kaggle and **Save & Run All**. It trains Virgo on Gemma 3 12B in 4 bits on a free T4 (about 2–4 hours) and saves `Virgo-1.0-Angkor-12B`. The server notebooks then use it automatically, and the 4B stays as a backup. Accept [google/gemma-3-12b-it](https://huggingface.co/google/gemma-3-12b-it)'s license first. It answers better, but writes about half as fast as 4B on a T4.
 
+## Google Vertex AI (paid, faster, no free-tier limits)
+
+On a Google Cloud **L4 GPU** (24 GB, 32 GB RAM) through **Colab Enterprise**: about 2–3× faster than a
+free T4, no 12-hour or weekly limits, and it can run without a browser tab (Executions). New Google
+Cloud accounts get $300 of free credit.
+
+- **Train the 12B:** [`chat/train_vertex.ipynb`](chat/train_vertex.ipynb), about 1–2 hours (≈ $1–2).
+- **Run the server** (12B chat + hearing + Virgo's voice on one GPU, at virgo.camksn.com):
+  [`serve/serve_vertex.ipynb`](serve/serve_vertex.ipynb), ≈ $0.85–1/hour while it runs.
+
+Each notebook's first cell lists the one-time setup: GPU quota, a runtime template
+(g2-standard-8 + L4, Spot to pay less), and secrets in Secret Manager. Stop the runtime when you
+don't need it.
+
 ## Run Virgo for the website (chat + real-time voice)
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nangmrr752/virgo-models/blob/main/serve/serve_colab.ipynb) — a free **test** server: it runs your trained Virgo-1.0-Angkor on Colab and prints `VIRGO_API_URL` and `VIRGO_API_KEY` for the Worker's secrets.
