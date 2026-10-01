@@ -26,6 +26,11 @@ Open the link → **Runtime → Change runtime type → T4 GPU** → **Runtime �
 
 **Smarter Virgo (12B):** open [`chat/train_kaggle.ipynb`](chat/train_kaggle.ipynb) on Kaggle and **Save & Run All**. It trains Virgo on Gemma 3 12B in 4 bits on a free T4 (about 2–4 hours) and saves `Virgo-1.0-Angkor-12B`. The server notebooks then use it automatically, and the 4B stays as a backup. Accept [google/gemma-3-12b-it](https://huggingface.co/google/gemma-3-12b-it)'s license first. It answers better, but writes about half as fast as 4B on a T4.
 
+## Virgo-1.0-Bayon
+
+No TPU? [`chat/train_bayon_gpu.ipynb`](chat/train_bayon_gpu.ipynb) trains Bayon on a GPU (Colab or Kaggle): 12B on a
+24 GB+ GPU, 4B (Virgo-1.0-Bayon-4B) on a T4.
+
 ## Free TPU training (experimental)
 
 [`chat/train_tpu_kaggle.ipynb`](chat/train_tpu_kaggle.ipynb) trains Virgo 12B on Kaggle's free **TPU v5e-8** (or on a Colab TPU, where smaller TPUs train the 4B)

@@ -61,11 +61,14 @@ if True:
 os.environ["VIRGO_CHAT_MODELS"] = f"virgo-1.0-angkor={ADAPTER}"
 
 if os.environ.get("SERVE_BAYON", "1") != "0":
-    bayon_repo = f"{me}/Virgo-1.0-Bayon"
-    try:
-        has_bayon = api.file_exists(bayon_repo, "config.json") or api.file_exists(bayon_repo, "adapter_config.json")
-    except Exception:
-        has_bayon = False
+    has_bayon = False
+    for bayon_repo in (f"{me}/Virgo-1.0-Bayon", f"{me}/Virgo-1.0-Bayon-4B"):
+        try:
+            has_bayon = api.file_exists(bayon_repo, "config.json") or api.file_exists(bayon_repo, "adapter_config.json")
+        except Exception:
+            has_bayon = False
+        if has_bayon:
+            break
     if has_bayon and (len(gpus) > 1 or big_gpu):
         BAYON = link_to_workspace("chat/out/virgo-1.0-bayon")
         print("⬇️ Checking Virgo-1.0-Bayon")
