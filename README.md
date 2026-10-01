@@ -65,7 +65,8 @@ Colab's free GPU limit reached? Use **Kaggle** instead (free T4, about 30 GPU ho
 
 After that, running the notebook is all it takes. Without those secrets, the notebooks use a random `trycloudflare.com` address, as before.
 
-For a permanent server on a rented GPU (RunPod, Vast.ai…):
+For a permanent server on a rented GPU, see **[RUNPOD.md](RUNPOD.md)**: one start command runs everything
+(models, voice, your Cloudflare address) and restarts the server if it stops. By hand:
 
 ```bash
 git clone https://github.com/nangmrr752/virgo-models && cd virgo-models
