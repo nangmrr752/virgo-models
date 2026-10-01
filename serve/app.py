@@ -2,7 +2,7 @@
 
     uvicorn serve.app:app --host 0.0.0.0 --port 8000
 
-  POST /v1/chat        {"messages": [{"role": "user", "content": "Hi"}]}   → {"reply": "..."}
+  POST /v1/chat        {"messages": [...], "model": "virgo-1.0-bayon"}    → {"reply": "..."}  (model: optional)
   POST /v1/tts         {"text": "សួស្តី", "voice": "af_heart"}              → audio/wav
   POST /v1/stt         audio file (form field "file"), ?language=khmer     → {"text": "..."}
   POST /v1/transcribe  audio file (form field "file"), ?srt=1              → {"segments": [...]} or .srt
@@ -11,6 +11,8 @@
   WS   /v1/realtime    realtime speech to speech (see realtime/virgo_realtime.py)
   GET  /v1/models      what this server offers
 
+One server can run several Virgo chat models (VIRGO_CHAT_MODELS="virgo-1.0-angkor=<folder>,virgo-1.0-bayon=<folder>");
+GET /v1/models lists them under "chat_models", and /v1/chat picks one by "model" (the first by default).
 Models load the first time they're used, so the server starts fast and only uses memory for the
 abilities people actually call. Set VIRGO_API_KEY to require "Authorization: Bearer <key>".
 """
@@ -31,6 +33,40 @@ app = FastAPI(title="Virgo-1.0-Angkor", version="1.0.0")
 _models = {}
 
 
+def chat_models():
+    """{model id: folder}, in order (the first is the default, used by real-time voice too)."""
+    spec = os.environ.get("VIRGO_CHAT_MODELS", "")
+    found = {}
+    for part in filter(None, (p.strip() for p in spec.split(","))):
+        name, _, folder = part.partition("=")
+        folder = folder if os.path.isabs(folder) else os.path.join(ROOT, folder)
+        if name and os.path.isdir(folder):
+            found[name.strip()] = folder
+    return found or {"virgo-1.0-angkor": os.path.join(ROOT, "chat/out/virgo-1.0-chat-lora")}
+
+
+def load_chat(model=None):
+    """A Virgo chat model by id. With several GPUs each model gets its own (the first model the first
+    GPU, the next the last GPU, …); on one GPU they share it."""
+    import torch
+
+    models = chat_models()
+    model = model or next(iter(models))
+    if model not in models:
+        raise HTTPException(404, f"No chat model {model!r} here. This server has: {', '.join(models)}.")
+    key = f"chat:{model}"
+    if key not in _models:
+        from virgo_chat import VirgoChat
+
+        gpus = torch.cuda.device_count()
+        index = list(models).index(model)
+        gpu = 0 if gpus <= 1 or index == 0 else gpus - 1 - (index - 1) % (gpus - 1)
+        folder = models[model]
+        _models[key] = VirgoChat(adapter=folder if os.path.isdir(folder) else None, gpu=gpu)
+        print(f"Chat model {model} ready on GPU {gpu}")
+    return _models[key]
+
+
 @app.on_event("startup")
 def preload():
     """VIRGO_PRELOAD=chat,speech loads those models at start, so the first request isn't slow."""
@@ -38,6 +74,9 @@ def preload():
     # Speech (and Virgo's voice) first: the voice needs the most free memory while it loads.
     for name in sorted(names, key=lambda n: n != "speech"):
         load(name)
+        if name == "chat":
+            for model in list(chat_models())[1:]:
+                load_chat(model)
         if name == "speech":
             # Start Virgo-1.0-Angkor-Voice now: the log says right away whether it works, and the
             # first answer isn't slow.
@@ -48,10 +87,7 @@ def preload():
 def load(name):
     if name not in _models:
         if name == "chat":
-            from virgo_chat import VirgoChat
-
-            adapter = os.path.join(ROOT, "chat/out/virgo-1.0-chat-lora")
-            _models[name] = VirgoChat(adapter=adapter if os.path.isdir(adapter) else None)
+            _models[name] = load_chat()
         elif name == "speech":
             from virgo_speech import VirgoSpeech
 
@@ -75,6 +111,7 @@ def auth(authorization: str = Header(default="")):
 
 class ChatBody(BaseModel):
     messages: list[dict]
+    model: str | None = None
     max_tokens: int = 512
     temperature: float = 0.7
 
@@ -110,14 +147,16 @@ def models():
     import json
 
     with open(os.path.join(ROOT, "virgo.json"), encoding="utf-8") as f:
-        return json.load(f)
+        info = json.load(f)
+    return {**info, "chat_models": list(chat_models())} if isinstance(info, dict) else info
 
 
 @app.post("/v1/chat", dependencies=[Depends(auth)])
 def chat(body: ChatBody):
     if not body.messages:
         raise HTTPException(400, "No messages.")
-    return {"model": "virgo-1.0", "reply": load("chat").reply(body.messages, min(body.max_tokens, 2048), body.temperature)}
+    bot = load_chat(body.model)
+    return {"model": body.model or next(iter(chat_models())), "reply": bot.reply(body.messages, min(body.max_tokens, 2048), body.temperature)}
 
 
 @app.post("/v1/tts", dependencies=[Depends(auth)])

@@ -46,15 +46,16 @@ def wants_4bit(base):
 
 
 class VirgoChat:
-    def __init__(self, base=None, adapter=None):
+    def __init__(self, base=None, adapter=None, gpu=0):
+        """gpu: which GPU to use when there are several (the server can run two Virgo models)."""
         if full_model(adapter):  # a whole model, not an adapter: load it as the base
             base, adapter = adapter, None
         base = base or adapter_base(adapter) or DEFAULT_BASE
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = f"cuda:{gpu}" if torch.cuda.is_available() else "cpu"
         self.tok = AutoTokenizer.from_pretrained(adapter or base)
         # Gemma must not run in float16 (its numbers overflow and generation crashes), so bfloat16 on
         # every GPU that torch can run it on, a T4 included (emulated there).
-        dtype = (torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float32) if self.device == "cuda" else torch.float32
+        dtype = (torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float32) if self.device.startswith("cuda") else torch.float32
         kwargs = {"dtype": dtype}
         # VIRGO_CHAT_4BIT=1: 4 bits for smaller models too (leaves GPU room for Virgo's voice on one T4).
         four_bit = wants_4bit(base) or os.environ.get("VIRGO_CHAT_4BIT") == "1"
@@ -63,7 +64,7 @@ class VirgoChat:
 
             kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=dtype)
-            kwargs["device_map"] = {"": 0}
+            kwargs["device_map"] = {"": gpu}
         try:
             model = AutoModelForCausalLM.from_pretrained(base, **kwargs)
         except ValueError:  # Gemma 3 4B and up are image+text models
