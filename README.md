@@ -33,6 +33,9 @@ free T4, no 12-hour or weekly limits, and it can run without a browser tab (Exec
 Cloud accounts get $300 of free credit.
 
 - **Train the 12B:** [`chat/train_vertex.ipynb`](chat/train_vertex.ipynb), about 1–2 hours (≈ $1–2).
+- **Make Virgo smarter with more data:** [`chat/distill_vertex.ipynb`](chat/distill_vertex.ipynb): Gemma 3 27B
+  writes and checks ~3,000 new Khmer/English examples (≈ 3–6 h); the training notebooks use them
+  automatically. (Gemma's outputs are allowed for this; Gemini's are not.)
 - **Run the server** (12B chat + hearing + Virgo's voice on one GPU, at virgo.camksn.com):
   [`serve/serve_vertex.ipynb`](serve/serve_vertex.ipynb), ≈ $0.85–1/hour while it runs.
 
