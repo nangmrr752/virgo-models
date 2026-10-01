@@ -26,6 +26,13 @@ Open the link → **Runtime → Change runtime type → T4 GPU** → **Runtime �
 
 **Smarter Virgo (12B):** open [`chat/train_kaggle.ipynb`](chat/train_kaggle.ipynb) on Kaggle and **Save & Run All**. It trains Virgo on Gemma 3 12B in 4 bits on a free T4 (about 2–4 hours) and saves `Virgo-1.0-Angkor-12B`. The server notebooks then use it automatically, and the 4B stays as a backup. Accept [google/gemma-3-12b-it](https://huggingface.co/google/gemma-3-12b-it)'s license first. It answers better, but writes about half as fast as 4B on a T4.
 
+## Free TPU training (experimental)
+
+[`chat/train_tpu_kaggle.ipynb`](chat/train_tpu_kaggle.ipynb) trains Virgo 12B on Kaggle's free **TPU v5e-8**
+(128 GB, full precision, its own weekly hours) with Keras + JAX, and saves a whole model,
+**Virgo-1.0-Angkor-12B-TPU**, that the server loads with `HF_MODEL`. New: compare its answers with the
+GPU-trained 12B before switching. The server itself stays on a GPU (the voice needs CUDA).
+
 ## Google Vertex AI (paid, faster, no free-tier limits)
 
 On a Google Cloud **L4 GPU** (24 GB, 32 GB RAM) through **Colab Enterprise**: about 2–3× faster than a
