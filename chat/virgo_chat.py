@@ -26,17 +26,29 @@ def adapter_base(adapter):
         return None
 
 
+def full_model(folder):
+    """True for a folder holding a whole model (e.g. trained on a TPU, chat/train_tpu_kaggle.ipynb)
+    rather than a LoRA adapter."""
+    return bool(folder) and os.path.isdir(folder) and not os.path.exists(os.path.join(folder, "adapter_config.json")) \
+        and os.path.exists(os.path.join(folder, "config.json"))
+
+
 def wants_4bit(base):
     """12B and bigger load in 4 bits on a GPU, so Virgo-1.0-Angkor 12B fits a free 16 GB T4."""
     flag = os.environ.get("VIRGO_4BIT")
     if flag is not None:
         return flag == "1"
+    if os.path.isdir(base):  # a local whole model: judge by the size of its weights (12B in bf16 ≈ 24 GB)
+        size = sum(os.path.getsize(os.path.join(base, f)) for f in os.listdir(base) if f.endswith(".safetensors"))
+        return torch.cuda.is_available() and size > 16e9
     sizes = [int(n) for n in BIG.findall(base.split("/")[-1])]
     return torch.cuda.is_available() and bool(sizes) and max(sizes) >= 12
 
 
 class VirgoChat:
     def __init__(self, base=None, adapter=None):
+        if full_model(adapter):  # a whole model, not an adapter: load it as the base
+            base, adapter = adapter, None
         base = base or adapter_base(adapter) or DEFAULT_BASE
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.tok = AutoTokenizer.from_pretrained(adapter or base)
@@ -63,7 +75,7 @@ class VirgoChat:
 
             model = PeftModel.from_pretrained(model, adapter)
         self.model = (model if four_bit else model.to(self.device)).eval()
-        self.gemma = "gemma" in base.lower()
+        self.gemma = "gemma" in base.lower() or "gemma" in str(getattr(model.config, "model_type", "")).lower()
         self.base = base
         print(f"Virgo chat: {base}{' (4-bit)' if four_bit else ''}{' + ' + adapter if adapter else ''}")
 
