@@ -28,7 +28,7 @@ Open the link → **Runtime → Change runtime type → T4 GPU** → **Runtime �
 
 ## Free TPU training (experimental)
 
-[`chat/train_tpu_kaggle.ipynb`](chat/train_tpu_kaggle.ipynb) trains Virgo 12B on Kaggle's free **TPU v5e-8**
+[`chat/train_tpu_kaggle.ipynb`](chat/train_tpu_kaggle.ipynb) trains Virgo 12B on Kaggle's free **TPU v5e-8** (or on a Colab TPU, where smaller TPUs train the 4B)
 (128 GB, full precision, its own weekly hours) with Keras + JAX, and saves a whole model,
 **Virgo-1.0-Angkor-12B-TPU**, that the server loads with `HF_MODEL`. New: compare its answers with the
 GPU-trained 12B before switching. The server itself stays on a GPU (the voice needs CUDA).
