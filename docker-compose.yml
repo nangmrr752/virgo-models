@@ -1,0 +1,29 @@
+# Virgo on your own GPU server, at your own address (Cloudflare Tunnel). See DOCKER.md.
+#   cp .env.example .env   # fill in the three values
+#   docker compose up -d --build
+#   docker compose logs -f virgo
+services:
+  virgo:
+    build: { context: ., dockerfile: docker/Dockerfile.gpu }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      VIRGO_TUNNEL: external        # the tunnel is the "tunnel" service below
+    volumes:
+      - ${VIRGO_DATA:-/opt/virgo/docker}:/workspace   # models, voice, caches: kept across restarts
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - { driver: nvidia, count: all, capabilities: [gpu] }
+    shm_size: "8gb"
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN}
+    # Shares the virgo container's network, so the tunnel's existing "http://localhost:8000" still works.
+    network_mode: "service:virgo"
+    depends_on: [virgo]

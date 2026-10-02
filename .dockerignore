@@ -1,0 +1,6 @@
+.git
+**/out/
+.env
+**/__pycache__
+chat/data_bayon
+env.sh

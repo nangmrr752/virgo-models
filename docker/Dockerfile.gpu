@@ -1,0 +1,13 @@
+# The Virgo server on an NVIDIA GPU (docker-compose.yml). PyTorch for CUDA 12.1 runs on drivers 530 and up
+# (e.g. 535). Models, the voice environment and caches live in the /workspace volume, not in the image.
+FROM pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg espeak-ng git curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /virgo
+COPY requirements-serve.txt requirements-train.txt ./
+RUN pip install --no-cache-dir -r requirements-serve.txt uv && pip uninstall -y -q torchao 2>/dev/null || true
+COPY . .
+ENV WORKSPACE=/workspace HF_HOME=/workspace/hf-cache PIP_CACHE_DIR=/workspace/pip-cache UV_CACHE_DIR=/workspace/uv-cache \
+    VIRGO_TUNNEL=external PYTHONUNBUFFERED=1
+EXPOSE 8000
+CMD ["python", "-u", "scripts/serve_rented_gpu.py"]

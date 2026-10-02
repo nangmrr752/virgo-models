@@ -103,6 +103,13 @@ if os.environ.get("USE_VIRGO_VOICE", "1") != "0":
             subprocess.run(["uv", "pip", "install", "-q", "--python", python, "voxcpm", "soundfile", "huggingface_hub"], check=True)
     if subprocess.run([python, "-c", "import kokoro"], capture_output=True).returncode:
         subprocess.run(["uv", "pip", "install", "-q", "--python", python, "kokoro>=0.9"])
+    # The newest PyTorch needs a newer NVIDIA driver than many machines have (e.g. 535): then the
+    # voice runs on the CPU, far too slowly. Use a CUDA 12.4 build when the GPU isn't seen.
+    if subprocess.run([python, "-c", "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 1)"], capture_output=True).returncode:
+        print("⏳ Installing a PyTorch build this GPU driver supports, for the voice...")
+        subprocess.run(["uv", "pip", "install", "-q", "--python", python, "torch==2.6.0", "torchaudio==2.6.0",
+                        "--index-url", "https://download.pytorch.org/whl/cu124"])
+        subprocess.run(["uv", "pip", "install", "-q", "--python", python, "torchcodec==0.2.*"])
     subprocess.run([python, "-c", "from huggingface_hub import snapshot_download; snapshot_download('openbmb/VoxCPM2')"], check=True)
     os.environ["VIRGO_VOX_PYTHON"] = python
     os.environ["VIRGO_VOX_REPO"] = f"{me}/Virgo-1.0-Angkor-Voice"
@@ -114,10 +121,12 @@ if os.environ.get("USE_VIRGO_VOICE", "1") != "0":
     print("✅ Virgo's voice is set up")
 
 # ---------- 3. Your address (Cloudflare Tunnel) ----------
-tunnel_token = need("CF_TUNNEL_TOKEN")
+# VIRGO_TUNNEL=external: the tunnel runs elsewhere (its own container in docker-compose.yml).
+own_tunnel = os.environ.get("VIRGO_TUNNEL") != "external"
+tunnel_token = need("CF_TUNNEL_TOKEN") if own_tunnel else None
 key = need("VIRGO_API_KEY")
 cloudflared = os.path.join(WORKSPACE, "cloudflared")
-if not os.path.exists(cloudflared):
+if own_tunnel and not os.path.exists(cloudflared):
     urllib.request.urlretrieve("https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64", cloudflared)
     os.chmod(cloudflared, 0o755)
 log_dir = os.path.join(WORKSPACE, "logs")
@@ -125,6 +134,8 @@ os.makedirs(log_dir, exist_ok=True)
 
 
 def start_tunnel():
+    if not own_tunnel:
+        return None
     # The token goes in the environment, never on the command line.
     return subprocess.Popen([cloudflared, "tunnel", "--no-autoupdate", "run"], env={**os.environ, "TUNNEL_TOKEN": tunnel_token},
                             stdout=open(os.path.join(log_dir, "tunnel.log"), "a"), stderr=subprocess.STDOUT)
@@ -150,7 +161,7 @@ for _ in range(600):
             break
 while True:
     time.sleep(15)
-    if tunnel.poll() is not None:
+    if tunnel is not None and tunnel.poll() is not None:
         print("⚠️ The tunnel stopped: restarting it")
         tunnel = start_tunnel()
     if server.poll() is not None:
