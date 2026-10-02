@@ -36,6 +36,18 @@ ENGLISH_VOICE = os.environ.get("VIRGO_ENGLISH_VOICE", "af_heart")  # a warm, cle
 DEFAULT_DESCRIPTION = "A young woman, warm and friendly, bright clear voice, calm natural pace"
 
 
+LATIN = re.compile(r"[A-Za-z]")
+
+
+def text_language(text):
+    """"km" for Khmer, "en" for text in Latin letters only (English and similar: Kokoro), else "other"
+    (Thai, Chinese, Japanese, Korean, Lao...: VoxCPM2, which speaks 30 languages)."""
+    if KHMER.search(text):
+        return "km"
+    letters = [c for c in text if c.isalpha()]
+    return "en" if not letters or all(LATIN.match(c) or ord(c) < 0x250 for c in letters) else "other"
+
+
 def available():
     """True when the VoxCPM2 environment is set up (the voice sample can come later)."""
     return bool(os.environ.get("VIRGO_VOX_PYTHON"))
@@ -97,7 +109,7 @@ class VoxVoice:
         """lang: "km" or "en" (worked out from the text when not given). steps: fewer is faster."""
         import soundfile as sf
 
-        lang = lang or ("km" if KHMER.search(text) else "en")
+        lang = lang or text_language(text)
         with self.lock:
             if self.worker.poll() is not None:
                 raise RuntimeError(f"Virgo voice: {self.why_stopped()}")
@@ -229,12 +241,12 @@ def serve(folder):
     for line in sys.stdin:
         try:
             request = json.loads(line)
-            text, lang = request["text"], request.get("lang") or ("km" if KHMER.search(request["text"]) else "en")
-            if lang != "km" and english is not None:  # English: Kokoro, fast
+            text, lang = request["text"], request.get("lang") or text_language(request["text"])
+            if lang == "en" and english is not None:  # English (Latin letters): Kokoro, fast
                 wave = np.concatenate([np.asarray(audio, dtype=np.float32) for _, _, audio in english(text, voice=ENGLISH_VOICE)])
                 out_rate = 24000
             else:
-                settings, prefix = voices["en" if lang == "en" else "km"]
+                settings, prefix = voices["en" if lang == "en" else "km"]  # other languages: Virgo's main voice
                 random.seed(7); np.random.seed(7); torch.manual_seed(7)  # the same voice every time
                 args = {"cfg_value": 2.0, "inference_timesteps": request.get("steps") or steps, "seed": 7, **settings}
                 wave = model.generate(text=prefix + text, **{k: v for k, v in args.items() if k in accepted})

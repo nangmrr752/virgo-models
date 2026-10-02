@@ -24,39 +24,66 @@ STT_WORDS = "Virgo AI, KSN, Virgo-1.0-Bayon, Angkor, កម្ពុជា, ភ�
 # Whisper large-v3-turbo hears Khmer far better than small; on a CPU, small stays (turbo is slow there).
 STT_BASE = os.environ.get("VIRGO_STT_MODEL") or ("openai/whisper-large-v3-turbo" if DEVICE == 0 else "openai/whisper-small")
 # Realtime voice picks only between these languages (Whisper codes), so Khmer isn't heard as another language.
-STT_LANGUAGES = [c.strip() for c in os.environ.get("VIRGO_STT_LANGUAGES", "km,en").split(",") if c.strip()]
+# Which languages hearing listens for: "all" (every language Whisper knows, ~99), or a list like "km,en".
+STT_LANGUAGES = [c.strip() for c in os.environ.get("VIRGO_STT_LANGUAGES", "all").split(",") if c.strip()]
 WHISPER_NAMES = {"km": "khmer", "en": "english"}
 
 
-LATIN_RUN = re.compile(r"[A-Za-z][A-Za-z0-9'’.\-]*(?:[\s,]+[A-Za-z][A-Za-z0-9'’.\-]*)*")
+# Scripts the fallback voices can tell apart, in text order. Latin letters are "en" (Microsoft's
+# multilingual English voices also read French, Spanish, Vietnamese... well).
+SCRIPTS = [
+    ("km", r"\u1780-\u17ff\u19e0-\u19ff"), ("th", r"\u0e00-\u0e7f"), ("lo", r"\u0e80-\u0eff"), ("my", r"\u1000-\u109f"),
+    ("ja", r"\u3040-\u30ff"), ("ko", r"\uac00-\ud7af\u1100-\u11ff"), ("zh", r"\u4e00-\u9fff\u3400-\u4dbf"),
+    ("hi", r"\u0900-\u097f"), ("ar", r"\u0600-\u06ff"), ("ru", r"\u0400-\u04ff"), ("en", r"A-Za-z\u00c0-\u024f\u1e00-\u1eff"),
+]
+SCRIPT_OF = [(lang, re.compile(f"[{chars}]")) for lang, chars in SCRIPTS]
+
+
+def char_language(c):
+    return next((lang for lang, pattern in SCRIPT_OF if pattern.match(c)), None)
 
 
 def split_languages(text):
-    """Text → [(lang, part)] in order: "km" for Khmer (with its numbers and punctuation), "en" for English
-    words. Only runs of Latin letters become English; everything else stays with the Khmer around it."""
-    if not KHMER.search(text):
-        return [("en", text)]
-    parts, last = [], 0
-    for m in LATIN_RUN.finditer(text):
-        if sum(c.isalpha() for c in m.group(0)) < 2:  # a single letter stays with the Khmer
+    """Text → [(lang, part)] in order, one part per writing system (Khmer, Thai, Chinese, Latin...).
+    Numbers, punctuation and single Latin letters stay with the part around them."""
+    parts = []
+    for c in text:
+        lang = char_language(c)
+        if lang is None or not parts:
+            if not parts:
+                parts.append([lang, c])
+            else:
+                parts[-1][1] += c
             continue
-        if text[last:m.start()].strip():
-            parts.append(("km", text[last:m.start()]))
-        parts.append(("en", m.group(0)))
-        last = m.end()
-    if text[last:].strip():
-        parts.append(("km", text[last:]))
-    merged = []  # join neighbours of the same language; drop parts with nothing to say
-    for lang, part in parts:
-        if not re.search(r"\w", part):
-            if merged:
-                merged[-1] = (merged[-1][0], merged[-1][1] + part)
-            continue
-        if merged and merged[-1][0] == lang:
-            merged[-1] = (lang, merged[-1][1] + part)
+        if parts[-1][0] is None:
+            parts[-1][0] = lang
+        if parts[-1][0] == lang:
+            parts[-1][1] += c
         else:
-            merged.append((lang, part))
-    return [(lang, part.strip()) for lang, part in merged] or [("km", text)]
+            parts.append([lang, c])
+    # A Latin bit of one letter (an "A", a "x") inside another language stays with it.
+    merged = []
+    for lang, part in parts:
+        if merged and (lang == merged[-1][0] or (lang == "en" and sum(ch.isalpha() for ch in part) < 2 and merged[-1][0] != "en")):
+            merged[-1][1] += part
+        else:
+            merged.append([lang, part])
+    # A single letter at the very start goes with what follows ("A ជាអក្សរ" is Khmer).
+    if len(merged) > 1 and merged[0][0] == "en" and sum(ch.isalpha() for ch in merged[0][1]) < 2:
+        merged[1][1] = merged[0][1] + merged[1][1]
+        merged.pop(0)
+    # Chinese characters in Japanese text (kanji) are Japanese.
+    if any(lang == "ja" for lang, _ in merged):
+        merged = [["ja" if lang == "zh" else lang, part] for lang, part in merged]
+    out = [((lang or "en"), part.strip()) for lang, part in merged if re.search(r"\w", part)]
+    joined = []
+    for lang, part in out:  # neighbours that became the same language
+        if joined and joined[-1][0] == lang:
+            joined[-1] = (lang, joined[-1][1] + " " + part)
+        else:
+            joined.append((lang, part))
+    out = joined
+    return out or [("km" if KHMER.search(text) else "en", text)]
 
 
 class VirgoSpeech:
@@ -102,6 +129,8 @@ class VirgoSpeech:
             kwargs["num_beams"] = beams
         # Virgo's own words (names it should spell right), given to Whisper as earlier "speech".
         words = os.environ.get("VIRGO_STT_WORDS", STT_WORDS).strip()
+        if language not in (None, "khmer", "english", "km", "en"):
+            words = ""  # Virgo's word list is Khmer and English: it would only confuse other languages
         if words:
             try:
                 kwargs["prompt_ids"] = pipe.tokenizer.get_prompt_ids(words, return_tensors="pt").to(model.device)
@@ -116,7 +145,11 @@ class VirgoSpeech:
     @staticmethod
     def _pick_language(model, tokenizer, features):
         """The most likely of STT_LANGUAGES (Whisper's own language guess, limited to those)."""
-        codes = [c for c in STT_LANGUAGES if tokenizer.convert_tokens_to_ids(f"<|{c}|>") not in (None, tokenizer.unk_token_id)]
+        wanted = STT_LANGUAGES
+        if wanted == ["all"]:
+            lang_to_id = getattr(model.generation_config, "lang_to_id", None) or {}
+            wanted = [t.strip("<|>") for t in lang_to_id] or ["km", "en"]
+        codes = [c for c in wanted if tokenizer.convert_tokens_to_ids(f"<|{c}|>") not in (None, tokenizer.unk_token_id)]
         if len(codes) < 2:
             return WHISPER_NAMES.get(codes[0], codes[0]) if codes else None
         try:
@@ -164,13 +197,12 @@ class VirgoSpeech:
                 self._vox = False
         parts = split_languages(text)
         if len(parts) == 1:
-            lang, part = parts[0]
-            return self._khmer(part) if lang == "km" else self._english(part, voice)
+            return self._speak_part(*parts[0], voice)
         # Khmer mixed with English: each part in its own voice (Khmer: Piseth/Sreymom, English: Andrew/Ava),
         # joined into one clip with a short pause.
         waves, rate = [], None
         for lang, part in parts:
-            wave, r = self._khmer(part) if lang == "km" else self._english(part, voice)
+            wave, r = self._speak_part(lang, part, voice)
             wave = np.asarray(wave, np.float32).reshape(-1)
             if rate is None:
                 rate = r
@@ -178,6 +210,22 @@ class VirgoSpeech:
                 wave = np.interp(np.arange(0, len(wave), r / rate), np.arange(len(wave)), wave).astype(np.float32)
             waves += [wave, np.zeros(int(0.06 * rate), np.float32)]
         return np.concatenate(waves[:-1]), rate
+
+    def _speak_part(self, lang, text, voice):
+        """One language's text with its fallback voice: Khmer (Piseth/Sreymom), English and other Latin-script
+        languages (Andrew/Ava), else Microsoft's voice for that language (ms_voice.py)."""
+        if lang == "km":
+            return self._khmer(text)
+        if lang == "en":
+            return self._english(text, voice)
+        try:
+            import ms_voice
+
+            if ms_voice.available():
+                return ms_voice.speak(text, ms_voice.voice_for(lang))
+        except Exception as err:
+            print(f"No {lang} voice, reading it with the English voice:", err)
+        return self._english(text, voice)
 
     def _vox_voice(self):
         if getattr(self, "_vox", None) is None:
