@@ -17,7 +17,9 @@ import soundfile as sf
 import torch
 
 KHMER = re.compile(r"[ក-៿᧠-᧿]")
-STT_TUNED = "speech/out/virgo-1.0-stt"
+# Virgo's Khmer ear: VIRGO_STT_KHMER_MODEL (a folder or a Hugging Face repo, e.g.
+# soknang11/Virgo-1.0-Angkor-Hearing), else the folder the server downloads it to.
+STT_TUNED = os.environ.get("VIRGO_STT_KHMER_MODEL") or "speech/out/virgo-1.0-stt"
 DEVICE = 0 if torch.cuda.is_available() else -1
 # Names Whisper should expect and spell right (VIRGO_STT_WORDS to change; empty to turn off).
 STT_WORDS = "Virgo AI, KSN, Virgo-1.0-Bayon, Angkor, កម្ពុជា, ភ្នំពេញ."
@@ -95,7 +97,11 @@ def split_languages(text):
 
 class VirgoSpeech:
     def __init__(self, stt_model=None):
-        self.stt_model = stt_model or (STT_TUNED if os.path.isdir(STT_TUNED) else STT_BASE)
+        tuned_ready = os.path.isfile(os.path.join(STT_TUNED, "config.json")) or (
+            bool(os.environ.get("VIRGO_STT_KHMER_MODEL")) and not os.path.isdir(STT_TUNED))  # a Hugging Face repo
+        self.stt_model = stt_model or (STT_TUNED if tuned_ready else STT_BASE)
+        if not stt_model and not tuned_ready:
+            print("Hearing: no Virgo Khmer ear found (", STT_TUNED, "): plain Whisper hears Khmer too")
         self.general_model = None if STT_GENERAL.lower() == "off" else STT_GENERAL
         if self.general_model == self.stt_model:
             self.general_model = None  # no Khmer-only model here: the one model does everything
