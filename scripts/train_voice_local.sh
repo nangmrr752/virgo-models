@@ -28,6 +28,15 @@ mkdir -p "$WORK" "$ROOT/logs"
     uv venv -q --python 3.11 "$ENVDIR"
   fi
   uv pip install -q --python "$PY" -e "$ROOT/VoxCPM" argbind tensorboardX soundfile huggingface_hub
+  # The newest PyTorch needs a newer NVIDIA driver than many machines have (e.g. 535 = CUDA 12.2) and
+  # then quietly runs on the CPU (days instead of hours). Use a CUDA 12.4 build when the GPU isn't seen.
+  if ! "$PY" -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 1)"; then
+    echo "PyTorch can't see the GPU with this driver: installing a CUDA 12.4 build"
+    uv pip install -q --python "$PY" "torch==2.6.0" "torchaudio==2.6.0" --index-url https://download.pytorch.org/whl/cu124
+    uv pip install -q --python "$PY" "torchcodec==0.2.*"
+  fi
+  "$PY" -c "import torch, sys; ok = torch.cuda.is_available(); print('GPU for the voice:', torch.cuda.get_device_name(0) if ok else 'none'); sys.exit(0 if ok else 1)" \
+    || { echo "❌ The voice environment can't use the GPU (see nvidia-smi). Stopping instead of running for days on the CPU."; exit 1; }
   BASE=$("$PY" -c "from huggingface_hub import snapshot_download; print(snapshot_download('openbmb/VoxCPM2'))")
 
   echo "== Clips =="
