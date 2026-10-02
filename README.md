@@ -29,7 +29,7 @@ Open the link → **Runtime → Change runtime type → T4 GPU** → **Runtime �
 ## Your own GPU
 
 On an Ubuntu machine with an NVIDIA GPU (e.g. RTX 4090), see **[LOCAL.md](LOCAL.md)**: one setup script, then
-`bash scripts/train_local.sh bayon 12b` trains and uploads a model.
+`bash scripts/train_local.sh bayon 27b` trains and uploads a model.
 
 ## Virgo-1.0-Bayon
 

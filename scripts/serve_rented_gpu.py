@@ -62,21 +62,24 @@ os.environ["VIRGO_CHAT_MODELS"] = f"virgo-1.0-angkor={ADAPTER}"
 
 if os.environ.get("SERVE_BAYON", "1") != "0":
     has_bayon = False
-    for bayon_repo in (f"{me}/Virgo-1.0-Bayon", f"{me}/Virgo-1.0-Bayon-4B"):
+    for bayon_repo in (f"{me}/Virgo-1.0-Bayon", f"{me}/Virgo-1.0-Bayon-12B", f"{me}/Virgo-1.0-Bayon-4B"):
         try:
             has_bayon = api.file_exists(bayon_repo, "config.json") or api.file_exists(bayon_repo, "adapter_config.json")
         except Exception:
             has_bayon = False
         if has_bayon:
             break
-    if has_bayon and (len(gpus) > 1 or big_gpu):
+    sys.path.append(os.path.join(ROOT, "serve"))
+    from fit import bayon_fits
+
+    if has_bayon and bayon_fits(bayon_repo):
         BAYON = link_to_workspace("chat/out/virgo-1.0-bayon")
         print("⬇️ Checking Virgo-1.0-Bayon")
         snapshot_download(bayon_repo, local_dir=BAYON)
         os.environ["VIRGO_CHAT_MODELS"] += f",virgo-1.0-bayon={BAYON}"
         print("✅ Also serving Virgo-1.0-Bayon at the same address")
     elif has_bayon:
-        print("ℹ️ Virgo-1.0-Bayon won't fit next to Angkor on this GPU: serving Angkor only.")
+        print(f"ℹ️ {bayon_repo} won't fit next to Angkor on these GPUs: serving Angkor only.")
 
 HEARING = link_to_workspace("speech/out/virgo-1.0-stt")
 if True:

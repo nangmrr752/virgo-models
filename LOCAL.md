@@ -16,8 +16,8 @@ Face first: [gemma-3-12b-it](https://huggingface.co/google/gemma-3-12b-it), [gem
 ## 2. Train
 ```bash
 tmux                                                          # keeps training going if you disconnect
-bash /opt/virgo-models/scripts/train_local.sh bayon 12b     # → Virgo-1.0-Bayon
-bash /opt/virgo-models/scripts/train_local.sh angkor 12b    # → Virgo-1.0-Angkor-12B
+bash /opt/virgo/virgo-models/scripts/train_local.sh bayon 27b  # → Virgo-1.0-Bayon (Gemma 3 27B, smarter than Angkor; ~3-5 h on a 4090)
+bash /opt/virgo/virgo-models/scripts/train_local.sh angkor 12b    # → Virgo-1.0-Angkor-12B
 ```
 Each run: pulls the latest code and data (plus the Gemma 27B examples if you made them), trains, scores
 Virgo, and uploads the model privately to Hugging Face. Out of memory? add `--max-len 768`.
@@ -38,3 +38,8 @@ export HF_TOKEN=... CF_TUNNEL_TOKEN=... VIRGO_API_KEY=...
 bash scripts/start_server.sh
 ```
 Stop any Kaggle/Colab/RunPod server first (they share the tunnel). Virgo is online while this machine is.
+
+## Serving the 27B Bayon
+
+Bayon 27B needs about 17 GB in 4 bits. The server adds it next to Angkor only when it fits
+(`serve/fit.py`): a second GPU, or one GPU of 40 GB or more. Otherwise it serves Angkor alone.
