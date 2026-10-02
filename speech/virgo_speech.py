@@ -19,6 +19,8 @@ import torch
 KHMER = re.compile(r"[ក-៿᧠-᧿]")
 STT_TUNED = "speech/out/virgo-1.0-stt"
 DEVICE = 0 if torch.cuda.is_available() else -1
+# Names Whisper should expect and spell right (VIRGO_STT_WORDS to change; empty to turn off).
+STT_WORDS = "Virgo AI, KSN, Virgo-1.0-Bayon, Angkor, កម្ពុជា, ភ្នំពេញ."
 # Whisper large-v3-turbo hears Khmer far better than small; on a CPU, small stays (turbo is slow there).
 STT_BASE = os.environ.get("VIRGO_STT_MODEL") or ("openai/whisper-large-v3-turbo" if DEVICE == 0 else "openai/whisper-small")
 # Realtime voice picks only between these languages (Whisper codes), so Khmer isn't heard as another language.
@@ -63,8 +65,22 @@ class VirgoSpeech:
         features = features.to(model.device, next(model.parameters()).dtype)
         language = language or self._pick_language(model, pipe.tokenizer, features)
         kwargs = {"language": language, "task": "transcribe"} if language else {}
+        # Careful listening: Whisper weighs several guesses (beam search) instead of taking the first.
+        beams = int(os.environ.get("VIRGO_STT_BEAMS", "5"))
+        if beams > 1:
+            kwargs["num_beams"] = beams
+        # Virgo's own words (names it should spell right), given to Whisper as earlier "speech".
+        words = os.environ.get("VIRGO_STT_WORDS", STT_WORDS).strip()
+        if words:
+            try:
+                kwargs["prompt_ids"] = pipe.tokenizer.get_prompt_ids(words, return_tensors="pt").to(model.device)
+            except Exception:
+                pass
         ids = model.generate(features, **kwargs)
-        return pipe.tokenizer.batch_decode(ids, skip_special_tokens=True)[0].strip()
+        text = pipe.tokenizer.batch_decode(ids, skip_special_tokens=True)[0].strip()
+        if words and text.startswith(words):  # older transformers keep the prompt in the output
+            text = text[len(words):].strip()
+        return text
 
     @staticmethod
     def _pick_language(model, tokenizer, features):
