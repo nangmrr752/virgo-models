@@ -50,8 +50,8 @@ train_manifest: $WORK/train.jsonl
 val_manifest: ""
 sample_rate: 16000
 out_sample_rate: 48000
-batch_size: 2
-grad_accum_steps: 8
+batch_size: 1
+grad_accum_steps: 16
 num_workers: 2
 preprocessing_num_workers: 2
 num_iters: $ITERS
@@ -62,7 +62,7 @@ learning_rate: 0.0001
 weight_decay: 0.01
 warmup_steps: 100
 max_steps: $ITERS
-max_batch_tokens: 8192
+max_batch_tokens: ${VIRGO_VOICE_TOKENS:-4096}
 max_grad_norm: 1.0
 save_path: $WORK/run
 tensorboard: $WORK/run/logs
