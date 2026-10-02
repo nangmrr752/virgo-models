@@ -9,6 +9,7 @@ Two ways to reach them, the same voices either way:
     It isn't licensed for commercial use and can stop working without notice: move to an Azure key for
     a public product.
 VIRGO_KHMER_VOICE picks the voice (default Piseth with Bayon, VIRGO_MAIN=bayon, else Sreymom).
+VIRGO_KHMER_RATE (e.g. -10% slower, +5% faster) and VIRGO_KHMER_PITCH (e.g. -4Hz, +4Hz) change how it sounds.
 VIRGO_KHMER_FALLBACK=off turns this off.
 """
 import asyncio
@@ -23,6 +24,19 @@ VOICES = {"sreymom": "km-KH-SreymomNeural", "piseth": "km-KH-PisethNeural"}
 def voice_name():
     wanted = os.environ.get("VIRGO_KHMER_VOICE") or ("piseth" if os.environ.get("VIRGO_MAIN", "").lower() == "bayon" else "sreymom")
     return VOICES.get(wanted.lower(), wanted)  # a short name, or a full Microsoft voice name
+
+
+def _signed(value, default):
+    value = (value or "").strip() or default
+    return value if value[0] in "+-" else "+" + value  # edge-tts needs the sign: "10%" → "+10%"
+
+
+def _rate():
+    return _signed(os.environ.get("VIRGO_KHMER_RATE"), "+0%")
+
+
+def _pitch():
+    return _signed(os.environ.get("VIRGO_KHMER_PITCH"), "+0Hz")
 
 
 def available():
@@ -52,7 +66,8 @@ def _decode(data):
 
 def _azure(text, voice):
     region = os.environ.get("AZURE_SPEECH_REGION", "southeastasia")
-    ssml = (f"<speak version='1.0' xml:lang='km-KH'><voice name='{voice}'>{escape(text)}</voice></speak>").encode("utf-8")
+    ssml = (f"<speak version='1.0' xml:lang='km-KH'><voice name='{voice}'><prosody rate='{_rate()}' pitch='{_pitch()}'>"
+            f"{escape(text)}</prosody></voice></speak>").encode("utf-8")
     req = urllib.request.Request(
         f"https://{region}.tts.speech.microsoft.com/cognitiveservices/v1", data=ssml, method="POST",
         headers={"Ocp-Apim-Subscription-Key": os.environ["AZURE_SPEECH_KEY"], "Content-Type": "application/ssml+xml",
@@ -66,7 +81,7 @@ def _edge(text, voice):
 
     async def run():
         audio = bytearray()
-        async for chunk in edge_tts.Communicate(text, voice).stream():
+        async for chunk in edge_tts.Communicate(text, voice, rate=_rate(), pitch=_pitch()).stream():
             if chunk["type"] == "audio":
                 audio += chunk["data"]
         return bytes(audio)
