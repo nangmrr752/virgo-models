@@ -32,6 +32,8 @@ WHISPER_NAMES = {"km": "khmer", "en": "english"}
 # languages but Khmer; Virgo's own hearing writes down Khmer. VIRGO_STT_GENERAL_MODEL=off: one model only.
 STT_GENERAL = os.environ.get("VIRGO_STT_GENERAL_MODEL") or STT_BASE
 KHMER_NAMES = ("km", "khmer")
+# Languages general Whisper mixes up with Khmer (similar sounds or scripts).
+LOOKALIKES = {"lo", "th", "my", "vi", "jw", "su", "si", "bo", "ms", "tl"}
 
 
 # Scripts the fallback voices can tell apart, in text order. Latin letters are "en" (Microsoft's
@@ -185,13 +187,16 @@ class VirgoSpeech:
             start = torch.tensor([[model.generation_config.decoder_start_token_id]], device=model.device)
             logits = model(input_features=features, decoder_input_ids=start).logits[0, -1]
             ids = [tokenizer.convert_tokens_to_ids(f"<|{c}|>") for c in codes]
-            scores = logits[ids]
-            best = codes[int(torch.argmax(scores))]
-            # Khmer mixed with English words is still Khmer: unless another language is clearly more
-            # likely (VIRGO_STT_KHMER_BIAS, default 2.0 logits), Khmer wins.
+            scores = logits[ids].float()
+            probs = torch.softmax(scores, dim=-1)
+            top = int(torch.argmax(probs))
+            best, sure = codes[top], float(probs[top])
+            # Khmer by default: general Whisper often mistakes Khmer for Lao, Thai, Burmese... and Khmer
+            # mixed with English is still Khmer. Another language only when Whisper is quite sure
+            # (VIRGO_STT_OTHER_MIN, default 0.8), and Khmer's neighbours only when it's very sure (0.97).
             if "km" in codes and best != "km":
-                bias = float(os.environ.get("VIRGO_STT_KHMER_BIAS", "2.0"))
-                if float(scores.max() - scores[codes.index("km")]) < bias:
+                needed = 0.97 if best in LOOKALIKES else float(os.environ.get("VIRGO_STT_OTHER_MIN", "0.8"))
+                if sure < needed:
                     best = "km"
             return WHISPER_NAMES.get(best, best)
         except Exception as err:  # fall back to Whisper's free choice
