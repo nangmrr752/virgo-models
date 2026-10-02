@@ -113,3 +113,25 @@ def speak(text, voice=None):
 def speak_english(text):
     """English text → (samples, rate) with a clear Microsoft neural voice (Ava, or Andrew with Bayon)."""
     return speak(text, english_voice_name())
+
+
+# One woman's and one man's voice for each other language the fallback can tell apart by its script.
+OTHER_VOICES = {
+    "th": ("th-TH-PremwadeeNeural", "th-TH-NiwatNeural"), "lo": ("lo-LA-KeomanyNeural", "lo-LA-ChanthavongNeural"),
+    "my": ("my-MM-NilarNeural", "my-MM-ThihaNeural"), "zh": ("zh-CN-XiaoxiaoNeural", "zh-CN-YunxiNeural"),
+    "ja": ("ja-JP-NanamiNeural", "ja-JP-KeitaNeural"), "ko": ("ko-KR-SunHiNeural", "ko-KR-InJoonNeural"),
+    "hi": ("hi-IN-SwaraNeural", "hi-IN-MadhurNeural"), "ar": ("ar-SA-ZariyahNeural", "ar-SA-HamedNeural"),
+    "ru": ("ru-RU-SvetlanaNeural", "ru-RU-DmitryNeural"),
+}
+
+
+def voice_for(lang):
+    """Microsoft's voice for a language code: a man's with Bayon (VIRGO_MAIN=bayon), else a woman's."""
+    if lang == "km":
+        return voice_name()
+    if lang == "en":
+        return english_voice_name()
+    woman, man = OTHER_VOICES.get(lang, (None, None))
+    if not woman:
+        return english_voice_name()  # the multilingual English voice reads many languages
+    return man if os.environ.get("VIRGO_MAIN", "").lower() == "bayon" else woman
