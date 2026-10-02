@@ -85,6 +85,18 @@ if bayon_only or os.environ.get("SERVE_BAYON", "1") != "0":
     elif has_bayon:
         print(f"ℹ️ {bayon_repo} won't fit next to Angkor on these GPUs: serving Angkor only.")
 
+# The chat models' base (e.g. Gemma 3 27B for Bayon, ~55 GB the first time), downloaded here with a
+# progress bar, so the server's loading step isn't a long silent wait.
+import json  # noqa: E402
+
+for spec in filter(None, os.environ["VIRGO_CHAT_MODELS"].split(",")):
+    cfg = os.path.join(spec.split("=", 1)[1], "adapter_config.json")
+    if os.path.exists(cfg):
+        base = json.load(open(cfg)).get("base_model_name_or_path")
+        if base and not os.path.isdir(base):
+            print("⬇️ Getting the base model", base, "(only the first time)")
+            snapshot_download(base, allow_patterns=["*.json", "*.safetensors", "*.model", "tokenizer*"])
+
 HEARING = link_to_workspace("speech/out/virgo-1.0-stt")
 if True:
     try:
