@@ -18,7 +18,18 @@ import os
 import urllib.request
 from xml.sax.saxutils import escape
 
-VOICES = {"sreymom": "km-KH-SreymomNeural", "piseth": "km-KH-PisethNeural"}
+VOICES = {"sreymom": "km-KH-SreymomNeural", "piseth": "km-KH-PisethNeural",
+          # English: Microsoft's clearest, most natural neural voices
+          "ava": "en-US-AvaMultilingualNeural", "andrew": "en-US-AndrewMultilingualNeural",
+          "emma": "en-US-EmmaMultilingualNeural", "brian": "en-US-BrianMultilingualNeural"}
+
+
+def english_voice_name():
+    """VIRGO_ENGLISH_FALLBACK_VOICE: ava (a woman, the default) / andrew (a man, the default with Bayon) /
+    emma / brian, or any full Microsoft voice name."""
+    bayon = os.environ.get("VIRGO_MAIN", "").lower() == "bayon"
+    wanted = os.environ.get("VIRGO_ENGLISH_FALLBACK_VOICE") or ("andrew" if bayon else "ava")
+    return VOICES.get(wanted.lower(), wanted)
 
 
 def voice_name():
@@ -66,7 +77,8 @@ def _decode(data):
 
 def _azure(text, voice):
     region = os.environ.get("AZURE_SPEECH_REGION", "southeastasia")
-    ssml = (f"<speak version='1.0' xml:lang='km-KH'><voice name='{voice}'><prosody rate='{_rate()}' pitch='{_pitch()}'>"
+    lang = "-".join(voice.split("-")[:2])
+    ssml = (f"<speak version='1.0' xml:lang='{lang}'><voice name='{voice}'><prosody rate='{_rate()}' pitch='{_pitch()}'>"
             f"{escape(text)}</prosody></voice></speak>").encode("utf-8")
     req = urllib.request.Request(
         f"https://{region}.tts.speech.microsoft.com/cognitiveservices/v1", data=ssml, method="POST",
@@ -93,6 +105,11 @@ def _edge(text, voice):
 
 
 def speak(text, voice=None):
-    """Khmer text → (samples float32, sample_rate)."""
+    """Khmer text (or any text, with `voice` naming another language's voice) → (samples float32, sample_rate)."""
     voice = voice or voice_name()
     return _azure(text, voice) if os.environ.get("AZURE_SPEECH_KEY") else _edge(text, voice)
+
+
+def speak_english(text):
+    """English text → (samples, rate) with a clear Microsoft neural voice (Ava, or Andrew with Bayon)."""
+    return speak(text, english_voice_name())
