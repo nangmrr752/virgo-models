@@ -25,7 +25,12 @@ cd /opt/virgo/virgo-models && git pull
 cp .env.example .env && nano .env      # HF_TOKEN, CF_TUNNEL_TOKEN, VIRGO_API_KEY
 docker compose up -d --build
 docker compose logs -f virgo           # wait for "✅ Virgo server is live"
+curl -m 10 -s 127.0.0.1:8088/v1/models # answers once it's live
 ```
+
+In Cloudflare (Zero Trust → Networks → Tunnels → your tunnel → Public Hostname), point your address
+(e.g. virgo.camksn.com) to `http://127.0.0.1:8088`. Use `127.0.0.1`, not `localhost` (that can mean IPv6).
+Another port: set `VIRGO_PORT` in `.env` and change the route to match.
 
 The first start downloads the models and sets up the voice (a while); later starts are quick, since
 everything is kept in `/opt/virgo/docker`.
