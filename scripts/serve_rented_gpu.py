@@ -51,16 +51,18 @@ api = HfApi()
 me = api.whoami()["name"]
 
 # snapshot_download only fetches what changed, so a restart picks up newly trained models.
+# VIRGO_MAIN=bayon: Bayon instead of Angkor (Bayon 27B and Angkor don't both fit one 24 GB GPU).
+bayon_only = os.environ.get("VIRGO_MAIN", "angkor").lower() == "bayon"
 ADAPTER = link_to_workspace("chat/out/virgo-1.0-chat-lora")
-if True:
+if not bayon_only:
     repo = os.environ.get("HF_MODEL") or next(
         (r for r in (f"{me}/Virgo-1.0-Angkor-12B", f"{me}/Virgo-1.0-Angkor") if api.file_exists(r, "adapter_config.json")),
         f"{me}/Virgo-1.0-Angkor")
     print("⬇️ Downloading", repo)
     snapshot_download(repo, local_dir=ADAPTER)
-os.environ["VIRGO_CHAT_MODELS"] = f"virgo-1.0-angkor={ADAPTER}"
+os.environ["VIRGO_CHAT_MODELS"] = "" if bayon_only else f"virgo-1.0-angkor={ADAPTER}"
 
-if os.environ.get("SERVE_BAYON", "1") != "0":
+if bayon_only or os.environ.get("SERVE_BAYON", "1") != "0":
     has_bayon = False
     for bayon_repo in (f"{me}/Virgo-1.0-Bayon", f"{me}/Virgo-1.0-Bayon-12B", f"{me}/Virgo-1.0-Bayon-4B"):
         try:
@@ -72,11 +74,13 @@ if os.environ.get("SERVE_BAYON", "1") != "0":
     sys.path.append(os.path.join(ROOT, "serve"))
     from fit import bayon_fits
 
-    if has_bayon and bayon_fits(bayon_repo):
+    if bayon_only and not has_bayon:
+        sys.exit("❌ VIRGO_MAIN=bayon, but there's no Virgo-1.0-Bayon on your Hugging Face account yet.")
+    if has_bayon and (bayon_only or bayon_fits(bayon_repo)):
         BAYON = link_to_workspace("chat/out/virgo-1.0-bayon")
         print("⬇️ Checking Virgo-1.0-Bayon")
         snapshot_download(bayon_repo, local_dir=BAYON)
-        os.environ["VIRGO_CHAT_MODELS"] += f",virgo-1.0-bayon={BAYON}"
+        os.environ["VIRGO_CHAT_MODELS"] = ",".join(filter(None, [os.environ["VIRGO_CHAT_MODELS"], f"virgo-1.0-bayon={BAYON}"]))
         print("✅ Also serving Virgo-1.0-Bayon at the same address")
     elif has_bayon:
         print(f"ℹ️ {bayon_repo} won't fit next to Angkor on these GPUs: serving Angkor only.")
