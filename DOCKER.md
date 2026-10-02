@@ -32,9 +32,6 @@ In Cloudflare (Zero Trust → Networks → Tunnels → your tunnel → Public Ho
 (e.g. virgo.camksn.com) to `http://127.0.0.1:8088`. Use `127.0.0.1`, not `localhost` (that can mean IPv6).
 Another port: set `VIRGO_PORT` in `.env` and change the route to match.
 
-```bash
-```
-
 The first start downloads the models and sets up the voice (a while); later starts are quick, since
 everything is kept in `/opt/virgo/docker`.
 
