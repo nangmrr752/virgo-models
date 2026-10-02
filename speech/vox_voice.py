@@ -58,7 +58,10 @@ class VoxVoice:
         # The worker's messages (and errors) go to a log file, so a crash says why.
         self.log_path = os.path.join(tempfile.gettempdir(), "virgo-voice-worker.log")
         log = open(self.log_path, "w")
-        self.worker = subprocess.Popen([python, os.path.abspath(__file__), "--serve", folder],
+        # VIRTUAL_ENV: the voice environment is a uv environment; anything installing into it on first use
+        # (Kokoro fetches spaCy's English model with `uv pip install`) must find it, or the worker stops.
+        env = {**os.environ, "VIRTUAL_ENV": os.path.dirname(os.path.dirname(os.path.abspath(python)))}
+        self.worker = subprocess.Popen([python, os.path.abspath(__file__), "--serve", folder], env=env,
                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log, text=True, encoding="utf-8")
         ready = self._read()
         if "error" in ready or not ready:

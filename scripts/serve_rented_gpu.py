@@ -119,6 +119,10 @@ if os.environ.get("USE_VIRGO_VOICE", "1") != "0":
             subprocess.run(["uv", "pip", "install", "-q", "--python", python, "voxcpm", "soundfile", "huggingface_hub"], check=True)
     if subprocess.run([python, "-c", "import kokoro"], capture_output=True).returncode:
         subprocess.run(["uv", "pip", "install", "-q", "--python", python, "kokoro>=0.9"])
+    # Kokoro's English needs spaCy's small English model; install it now instead of on first use.
+    if subprocess.run([python, "-c", "import en_core_web_sm"], capture_output=True).returncode:
+        subprocess.run(["uv", "pip", "install", "-q", "--python", python,
+                        "en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"])
     # The newest PyTorch needs a newer NVIDIA driver than many machines have (e.g. 535): then the
     # voice runs on the CPU, far too slowly. Use a CUDA 12.4 build when the GPU isn't seen.
     if subprocess.run([python, "-c", "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 1)"], capture_output=True).returncode:
