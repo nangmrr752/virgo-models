@@ -27,6 +27,11 @@ STT_BASE = os.environ.get("VIRGO_STT_MODEL") or ("openai/whisper-large-v3-turbo"
 # Which languages hearing listens for: "all" (every language Whisper knows, ~99), or a list like "km,en".
 STT_LANGUAGES = [c.strip() for c in os.environ.get("VIRGO_STT_LANGUAGES", "all").split(",") if c.strip()]
 WHISPER_NAMES = {"km": "khmer", "en": "english"}
+# Virgo's own hearing (STT_TUNED) was trained only on Khmer and now hears everything as Khmer. So a
+# second, general Whisper (every language, ~99) decides which language is spoken and writes down all
+# languages but Khmer; Virgo's own hearing writes down Khmer. VIRGO_STT_GENERAL_MODEL=off: one model only.
+STT_GENERAL = os.environ.get("VIRGO_STT_GENERAL_MODEL") or STT_BASE
+KHMER_NAMES = ("km", "khmer")
 
 
 # Scripts the fallback voices can tell apart, in text order. Latin letters are "en" (Microsoft's
@@ -89,16 +94,28 @@ def split_languages(text):
 class VirgoSpeech:
     def __init__(self, stt_model=None):
         self.stt_model = stt_model or (STT_TUNED if os.path.isdir(STT_TUNED) else STT_BASE)
+        self.general_model = None if STT_GENERAL.lower() == "off" else STT_GENERAL
+        if self.general_model == self.stt_model:
+            self.general_model = None  # no Khmer-only model here: the one model does everything
         self._stt = None
+        self._general = None
         self._khmer_tts = None
         self._english_tts = None
 
     # ---------- Speech to text ----------
-    def _pipeline(self):
-        if self._stt is None:
-            from transformers import pipeline
+    def _pipeline(self, general=False):
+        """Virgo's own (Khmer) hearing, or with general=True the every-language Whisper (the same model
+        when there's no separate Khmer one)."""
+        from transformers import pipeline
 
-            self._stt = pipeline("automatic-speech-recognition", model=self.stt_model, device=DEVICE)
+        dtype = torch.float16 if DEVICE == 0 else torch.float32
+        if general and self.general_model:
+            if self._general is None:
+                print("Hearing: every language with", self.general_model, "+ Khmer with", self.stt_model)
+                self._general = pipeline("automatic-speech-recognition", model=self.general_model, device=DEVICE, torch_dtype=dtype)
+            return self._general
+        if self._stt is None:
+            self._stt = pipeline("automatic-speech-recognition", model=self.stt_model, device=DEVICE, torch_dtype=dtype)
         return self._stt
 
     def stt(self, audio, language=None):
@@ -106,8 +123,15 @@ class VirgoSpeech:
         `language` like "khmer"."""
         if isinstance(audio, (dict, np.ndarray)):
             return self._stt_samples(audio, language)
-        kwargs = {"generate_kwargs": {"language": language, "task": "transcribe"}} if language else {}
-        return self._pipeline()(audio, **kwargs)["text"].strip()
+        if language:
+            khmer = language in KHMER_NAMES
+            return self._pipeline(general=not khmer)(audio, generate_kwargs={"language": language, "task": "transcribe"})["text"].strip()
+        # A file in an unknown language: the general Whisper writes it down; if that's Khmer, Virgo's own
+        # Khmer hearing writes it again, better.
+        text = self._pipeline(general=True)(audio)["text"].strip()
+        if self.general_model and KHMER.search(text):
+            text = self._pipeline()(audio, generate_kwargs={"language": "khmer", "task": "transcribe"})["text"].strip()
+        return text
 
     @torch.inference_mode()
     def _stt_samples(self, audio, language=None):
@@ -117,11 +141,16 @@ class VirgoSpeech:
         samples = np.asarray(samples, np.float32).reshape(-1)
         if rate != 16000:
             samples = np.interp(np.arange(0, len(samples), rate / 16000), np.arange(len(samples)), samples).astype(np.float32)
-        pipe = self._pipeline()
+        def features_for(pipe):
+            f = pipe.feature_extractor(samples, sampling_rate=16000, return_tensors="pt").input_features
+            return f.to(pipe.model.device, next(pipe.model.parameters()).dtype)
+
+        if not language:  # the general Whisper decides the language (Virgo's Khmer hearing would say Khmer)
+            judge = self._pipeline(general=True)
+            language = self._pick_language(judge.model, judge.tokenizer, features_for(judge))
+        pipe = self._pipeline(general=language not in KHMER_NAMES)
         model = pipe.model
-        features = pipe.feature_extractor(samples, sampling_rate=16000, return_tensors="pt").input_features
-        features = features.to(model.device, next(model.parameters()).dtype)
-        language = language or self._pick_language(model, pipe.tokenizer, features)
+        features = features_for(pipe)
         kwargs = {"language": language, "task": "transcribe"} if language else {}
         # Careful listening: Whisper weighs several guesses (beam search) instead of taking the first.
         beams = int(os.environ.get("VIRGO_STT_BEAMS", "5"))
@@ -172,8 +201,17 @@ class VirgoSpeech:
     # ---------- Transcribe (long audio, with timestamps) ----------
     def transcribe(self, path, language=None):
         """Long audio → [{start, end, text}] in 30-second chunks."""
-        kwargs = {"generate_kwargs": {"language": language, "task": "transcribe"}} if language else {}
-        out = self._pipeline()(path, chunk_length_s=30, batch_size=8, return_timestamps=True, **kwargs)
+        def run(pipe, lang):
+            kwargs = {"generate_kwargs": {"language": lang, "task": "transcribe"}} if lang else {}
+            return pipe(path, chunk_length_s=30, batch_size=8, return_timestamps=True, **kwargs)
+
+        if language:
+            out = run(self._pipeline(general=language not in KHMER_NAMES), language)
+        else:  # unknown language: general Whisper first; mostly Khmer → Virgo's Khmer hearing again
+            out = run(self._pipeline(general=True), None)
+            text = "".join(c["text"] for c in out["chunks"])
+            if self.general_model and len(KHMER.findall(text)) > 0.3 * max(1, len(re.sub(r"\s", "", text))):
+                out = run(self._pipeline(), "khmer")
         return [{"start": c["timestamp"][0] or 0.0, "end": c["timestamp"][1] or c["timestamp"][0] or 0.0, "text": c["text"].strip()}
                 for c in out["chunks"]]
 

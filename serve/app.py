@@ -90,6 +90,11 @@ def preload():
         if name == "speech":
             # Start Virgo-1.0-Angkor-Voice now: the log says right away whether it works, and the
             # first answer isn't slow.
+            try:  # both ears now (every-language Whisper + Virgo's Khmer hearing), not on the first question
+                _models["speech"]._pipeline()
+                _models["speech"]._pipeline(general=True)
+            except Exception as err:
+                print("Hearing didn't preload:", err)
             voice = _models["speech"]._vox_voice()
             print("🗣️ Voice:", "Virgo-1.0-Angkor-Voice (VoxCPM2)" if voice else "fallback voices (MMS / Kokoro): Virgo-1.0-Angkor-Voice isn't set up or didn't start")
 
