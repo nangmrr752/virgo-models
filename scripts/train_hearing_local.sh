@@ -11,7 +11,7 @@
 # need the GPU.
 set -euo pipefail
 CODE="$(cd "$(dirname "$0")/.." && pwd)"
-source "$CODE/env.sh"
+source "$CODE/scripts/env_auto.sh"   # your server (env.sh), Colab or Kaggle
 ROOT="$VIRGO_HOME"
 cd "$CODE"
 ME=$(python -c "from huggingface_hub import HfApi; print(HfApi().whoami()['name'])")
@@ -23,9 +23,11 @@ mkdir -p "$ROOT/logs"
   echo "== Training Virgo's hearing from $BASE ($(nvidia-smi --query-gpu=name --format=csv,noheader)) =="
   # Audio libraries the hearing training needs (the chat training environment doesn't have them).
   python -c "import soundfile, librosa" 2>/dev/null || python -m pip install -q soundfile librosa
-  # All of Whisper (not a small add-on): the 4090 has room, and it learns Khmer much better.
+  # All of Whisper (not a small add-on) on a 20 GB+ GPU: it learns Khmer much better. On a 16 GB T4
+  # (Colab/Kaggle) a LoRA add-on instead, so it fits.
+  if [ "${GPU_GB:-0}" -ge 20 ]; then HOW=(--full --lr 1e-5); else HOW=(--lr 1e-4); echo "16 GB GPU: training a LoRA add-on"; fi
   PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python -u speech/finetune_stt.py \
-    --base "$BASE" --full --lr 1e-5 --steps "${VIRGO_HEARING_STEPS:-6000}" --batch 8 \
+    --base "$BASE" "${HOW[@]}" --steps "${VIRGO_HEARING_STEPS:-6000}" --batch 8 \
     --work "$ROOT/hearing-train" --out "$ROOT/out/Virgo-1.0-Angkor-Hearing" --push "$REPO" "$@"
   echo "== Done: restart the Virgo server to use it (docker compose up -d) =="
 } 2>&1 | tee "$LOG"

@@ -12,13 +12,20 @@
 # Extra options go to chat/train.py, e.g. --epochs 2 or --max-len 768 (if it runs out of memory).
 set -euo pipefail
 CODE="$(cd "$(dirname "$0")/.." && pwd)"
-source "$CODE/env.sh"   # written by local_setup.sh: sets VIRGO_HOME (the data folder) and the conda env
+source "$CODE/scripts/env_auto.sh"   # your server (env.sh), Colab or Kaggle
 ROOT="$VIRGO_HOME"
 [ "${1:-}" = voice ] && { shift; exec bash "$CODE/scripts/train_voice_local.sh" "$@"; }  # Virgo's live voice
 [ "${1:-}" = hearing ] && { shift; exec bash "$CODE/scripts/train_hearing_local.sh" "$@"; }  # Virgo's hearing (Whisper)
-WHICH="${1:-bayon}"; DEFAULT_SIZE=12b; [ "$WHICH" = bayon ] && DEFAULT_SIZE=27b; SIZE="${2:-$DEFAULT_SIZE}"; shift $(( $# > 2 ? 2 : $# ))
+WHICH="${1:-bayon}"; DEFAULT_SIZE=12b; [ "$WHICH" = bayon ] && DEFAULT_SIZE=27b
+# Smaller GPUs (Colab/Kaggle T4, 16 GB): 27B doesn't fit, so Bayon defaults to 12B there.
+[ "$DEFAULT_SIZE" = 27b ] && [ "${GPU_GB:-0}" -lt 22 ] && DEFAULT_SIZE=12b
+SIZE="${2:-$DEFAULT_SIZE}"; shift $(( $# > 2 ? 2 : $# ))
+if [ "$SIZE" = 27b ] && [ "${GPU_GB:-0}" -lt 22 ]; then
+  echo "❌ 27B needs a 24 GB+ GPU (this one has ${GPU_GB} GB). Use: bash scripts/train_local.sh bayon 12b"; exit 1
+fi
 case "$SIZE" in 27b) BASE=google/gemma-3-27b-it ;; 12b) BASE=google/gemma-3-12b-it ;; 4b) BASE=google/gemma-3-4b-it ;; *) echo "Size: 27b, 12b or 4b"; exit 1 ;; esac
 EXTRA=""; [ "$SIZE" = 27b ] && EXTRA="--max-len 512"  # 27B in 4 bits fills most of a 24 GB GPU
+[ "$SIZE" = 12b ] && [ "${GPU_GB:-0}" -lt 22 ] && EXTRA="--max-len 512"  # 12B on a 16 GB T4
 case "$WHICH-$SIZE" in
   bayon-27b) NAME=Virgo-1.0-Bayon ;; bayon-12b) NAME=Virgo-1.0-Bayon-12B ;; bayon-4b) NAME=Virgo-1.0-Bayon-4B ;;
   angkor-12b) NAME=Virgo-1.0-Angkor-12B ;; angkor-4b) NAME=Virgo-1.0-Angkor ;;
