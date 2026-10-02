@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Trains a Virgo chat model on this machine's GPU and uploads it (private) to Hugging Face.
 #
-#   bash scripts/train_local.sh bayon 12b     # Virgo-1.0-Bayon      (also: bayon 4b → Virgo-1.0-Bayon-4B)
+#   bash scripts/train_local.sh bayon 27b     # Virgo-1.0-Bayon on Gemma 3 27B, smarter than Angkor (default)
+#                                            #   (also: bayon 12b → Virgo-1.0-Bayon-12B, bayon 4b → Virgo-1.0-Bayon-4B)
 #   bash scripts/train_local.sh angkor 12b    # Virgo-1.0-Angkor-12B (also: angkor 4b → Virgo-1.0-Angkor)
 #
 # Needs scripts/local_setup.sh first. Output in <data>/out/<model>, log in <data>/logs (data: /opt/virgo-data
@@ -11,10 +12,11 @@ set -euo pipefail
 CODE="$(cd "$(dirname "$0")/.." && pwd)"
 source "$CODE/env.sh"   # written by local_setup.sh: sets VIRGO_HOME (the data folder) and the conda env
 ROOT="$VIRGO_HOME"
-WHICH="${1:-bayon}"; SIZE="${2:-12b}"; shift $(( $# > 2 ? 2 : $# ))
-case "$SIZE" in 12b) BASE=google/gemma-3-12b-it ;; 4b) BASE=google/gemma-3-4b-it ;; *) echo "Size: 12b or 4b"; exit 1 ;; esac
+WHICH="${1:-bayon}"; DEFAULT_SIZE=12b; [ "$WHICH" = bayon ] && DEFAULT_SIZE=27b; SIZE="${2:-$DEFAULT_SIZE}"; shift $(( $# > 2 ? 2 : $# ))
+case "$SIZE" in 27b) BASE=google/gemma-3-27b-it ;; 12b) BASE=google/gemma-3-12b-it ;; 4b) BASE=google/gemma-3-4b-it ;; *) echo "Size: 27b, 12b or 4b"; exit 1 ;; esac
+EXTRA=""; [ "$SIZE" = 27b ] && EXTRA="--max-len 768"  # 27B in 4 bits fills most of a 24 GB GPU
 case "$WHICH-$SIZE" in
-  bayon-12b) NAME=Virgo-1.0-Bayon ;; bayon-4b) NAME=Virgo-1.0-Bayon-4B ;;
+  bayon-27b) NAME=Virgo-1.0-Bayon ;; bayon-12b) NAME=Virgo-1.0-Bayon-12B ;; bayon-4b) NAME=Virgo-1.0-Bayon-4B ;;
   angkor-12b) NAME=Virgo-1.0-Angkor-12B ;; angkor-4b) NAME=Virgo-1.0-Angkor ;;
   *) echo "Model: bayon or angkor"; exit 1 ;;
 esac
@@ -35,7 +37,7 @@ git pull -q
     DATA="chat/data_bayon/*.jsonl"
   fi
   python scripts/check_data.py "$DATA"
-  python -u chat/train.py --base "$BASE" --data "$DATA" --out "$OUT" --epochs 3 "$@"
+  python -u chat/train.py --base "$BASE" --data "$DATA" --out "$OUT" --epochs 3 $EXTRA "$@"
   echo "== Score =="
   python chat/evaluate.py --adapter "$OUT" || echo "(scoring failed; the model is still saved)"
   echo "== Upload =="
