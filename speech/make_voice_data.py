@@ -43,12 +43,46 @@ def khmer_sentences(pattern):
     return sorted(found)
 
 
+DESIGN_TEXT = "សួស្តី ខ្ញុំជា Virgo ជាជំនួយការ AI របស់ KSN។ ខ្ញុំរីករាយនឹងជួយអ្នក។"
+
+
+def design_voice(ref, repo, description):
+    """A new voice from a description: VoxCPM2 speaks one Khmer sentence in it, and that clip becomes the
+    voice sample (voice.wav + voice.json), saved to `repo`, so every later sentence sounds the same."""
+    import soundfile as sf
+    from huggingface_hub import HfApi
+
+    print(f"Making a new voice: {description}", flush=True)
+    model = load_model(ref)
+    best = None
+    for seed in range(4):  # a few tries; keep the one with the most natural length
+        import torch
+
+        torch.manual_seed(seed)
+        wave = model.generate(text=f"({description}){DESIGN_TEXT}", cfg_value=2.0, inference_timesteps=10)
+        seconds = len(wave) / model.tts_model.sample_rate
+        if 3 <= seconds <= 12 and (best is None or abs(seconds - 6) < abs(best[1] - 6)):
+            best = (wave, seconds)
+    if best is None:
+        sys.exit("❌ Couldn't make a clean voice sample from that description: try other words.")
+    sf.write(os.path.join(ref, "voice.wav"), best[0], model.tts_model.sample_rate)
+    with open(os.path.join(ref, "voice.json"), "w", encoding="utf-8") as f:
+        json.dump({"text": DESIGN_TEXT, "description": description}, f, ensure_ascii=False)
+    api = HfApi()
+    api.create_repo(repo, private=True, exist_ok=True)
+    for name in ("voice.wav", "voice.json"):
+        api.upload_file(path_or_fileobj=os.path.join(ref, name), path_in_repo=name, repo_id=repo, commit_message="Voice sample")
+    print(f"✅ New voice sample saved to {repo} (listen: {os.path.join(ref, 'voice.wav')})", flush=True)
+    del model
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--repo", help="Hugging Face repo with voice.wav (Virgo-1.0-Angkor-Voice)")
     p.add_argument("--out", required=True)
     p.add_argument("--count", type=int, default=600)
     p.add_argument("--data", default="chat/data/*.jsonl")
+    p.add_argument("--design", help="no voice.wav in --repo yet: make one from this description (a new voice, e.g. for Virgo-1.0-Bayon)")
     p.add_argument("--recordings", help="your own recordings: .wav files + metadata.csv (file_name,sentence)")
     args = p.parse_args()
     os.makedirs(os.path.join(args.out, "clips"), exist_ok=True)
@@ -66,9 +100,14 @@ def main():
     from huggingface_hub import snapshot_download
 
     ref = os.path.join(args.out, "reference")  # only the voice sample: no old LoRA while making clips
-    snapshot_download(args.repo, local_dir=ref, allow_patterns=["voice.wav", "voice.json"])
+    try:
+        snapshot_download(args.repo, local_dir=ref, allow_patterns=["voice.wav", "voice.json"])
+    except Exception:  # a new voice: its repo doesn't exist yet
+        os.makedirs(ref, exist_ok=True)
     if not os.path.exists(os.path.join(ref, "voice.wav")):
-        sys.exit("❌ No voice.wav in " + args.repo + ": make Virgo's voice first (speech/design_voice.ipynb).")
+        if not args.design:
+            sys.exit("❌ No voice.wav in " + args.repo + ": make Virgo's voice first (speech/design_voice.ipynb).")
+        design_voice(ref, args.repo, args.design)
     sentences = khmer_sentences(args.data)
     random.Random(7).shuffle(sentences)
     sentences = sentences[: args.count]
