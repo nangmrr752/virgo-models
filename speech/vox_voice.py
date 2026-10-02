@@ -144,12 +144,27 @@ def load_model(folder, device=None):
 
     if os.environ.get("VIRGO_VOX_OPTIMIZE") == "0" and "optimize" in inspect.signature(VoxCPM.from_pretrained).parameters:
         kwargs["optimize"] = False
-    # VoxCPM2 builds its 2B model in float32 before converting it: about 8 GB. Building it straight on
-    # the GPU keeps that out of RAM (Colab has 12 GB; the worker was killed for memory there).
-    if device.startswith("cuda"):
+    # VoxCPM2 builds its 2B model in float32 before converting it to bfloat16: about 9 GB at its peak.
+    # - Built in RAM (the default when the machine has 24 GB or more): only the finished ~5 GB model
+    #   goes to the GPU, so it fits next to a big chat model (Bayon 27B on a 24 GB GPU).
+    # - Built on the GPU (small-RAM machines, e.g. Colab's 12 GB): RAM is spared, but the GPU holds
+    #   the 9 GB peak while loading. VIRGO_VOX_BUILD=gpu or =cpu chooses.
+    build = os.environ.get("VIRGO_VOX_BUILD") or ("cpu" if ram_gb() >= 24 else "gpu")
+    if device.startswith("cuda") and build == "gpu":
         with torch.device(device):
-            return VoxCPM.from_pretrained(base, **kwargs)
-    return VoxCPM.from_pretrained(base, **kwargs)
+            model = VoxCPM.from_pretrained(base, **kwargs)
+    else:
+        model = VoxCPM.from_pretrained(base, **kwargs)
+    if device.startswith("cuda"):
+        torch.cuda.empty_cache()  # give back what loading reserved, keep only the model
+    return model
+
+
+def ram_gb():
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 1e9
+    except (ValueError, OSError, AttributeError):
+        return 0
 
 
 def voice_settings(folder, lang="km"):
@@ -197,13 +212,20 @@ def serve(folder):
             try:
                 from kokoro import KPipeline
 
-                english = KPipeline(lang_code="a")  # American English
+                # Kokoro is small and fast on the CPU: there it leaves the GPU to a big chat model
+                # (VIRGO_MAIN=bayon). VIRGO_ENGLISH_DEVICE=cuda or =cpu chooses.
+                english_device = os.environ.get("VIRGO_ENGLISH_DEVICE") or ("cpu" if os.environ.get("VIRGO_MAIN", "").lower() == "bayon" else None)
+                try:
+                    english = KPipeline(lang_code="a", device=english_device)  # American English
+                except TypeError:  # older Kokoro without `device`
+                    english = KPipeline(lang_code="a")
             except Exception as err:  # not installed: VoxCPM2 speaks English too
                 print("Kokoro (English voice) unavailable, VoxCPM2 speaks English:", repr(err), file=sys.stderr)
     except Exception as err:
         reply({"error": repr(err)})
         return
-    reply({"rate": rate, "sample": bool(voices["km"][0]), "steps": steps, "english": "kokoro" if english else "voxcpm2"})
+    gpu_gb = round(torch.cuda.memory_reserved() / 1e9, 1) if torch.cuda.is_available() else 0
+    reply({"rate": rate, "sample": bool(voices["km"][0]), "steps": steps, "english": "kokoro" if english else "voxcpm2", "gpu_gb": gpu_gb})
     for line in sys.stdin:
         try:
             request = json.loads(line)
