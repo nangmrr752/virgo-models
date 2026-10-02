@@ -98,13 +98,13 @@ class VirgoSpeech:
         return "\n".join(f"{i}\n{ts(s['start'])} --> {ts(s['end'])}\n{s['text']}\n" for i, s in enumerate(segments, 1))
 
     # ---------- Text to speech ----------
-    def tts(self, text, voice="af_heart"):
+    def tts(self, text, voice="af_heart", steps=None):
         """Text → (samples float32, sample_rate). Virgo-1.0-Angkor-Voice (VoxCPM2, vox_voice.py) speaks
         every language when it's set up; otherwise Khmer text uses the Khmer voice and English Kokoro."""
         vox = self._vox_voice()
         if vox:
             try:
-                return vox(text)
+                return vox(text, steps=steps)
             except Exception as err:
                 print("Virgo-1.0-Angkor-Voice failed, using the other voices for now:", err)
                 self._vox = False

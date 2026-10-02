@@ -30,13 +30,16 @@ from virgo_chat import VirgoChat  # noqa: E402
 from virgo_speech import VirgoSpeech  # noqa: E402
 
 RATE = 16000
-SILENCE_S = 0.8     # a pause this long ends your turn (Khmer sentences often pause mid-way)
+SILENCE_S = float(os.environ.get("VIRGO_LIVE_SILENCE", "0.6"))  # a pause this long ends your turn
 MIN_SPEECH_S = 0.35  # shorter sounds (a cough, a click) are ignored
-FIRST_CHUNK = 60    # characters: the first words are spoken as soon as a phrase this long is ready
+FIRST_CHUNK = 40    # characters: the first words are spoken as soon as a phrase this long is ready
+LONG_SENTENCE = 140  # longer sentences are spoken in parts (at a comma), so each part starts sooner
+# VoxCPM2 steps in live mode: fewer is faster (the voice file setting VIRGO_VOX_STEPS stays for /v1/tts).
+LIVE_STEPS = int(os.environ.get("VIRGO_LIVE_VOX_STEPS", "5"))
 MAX_VOICE_TOKENS = 220
 # Spoken answers: short and conversational, so Virgo starts talking sooner and sounds natural.
 VOICE_SYSTEM = (
-    "You are Virgo, an AI assistant made by KSN (Virgo-1.0-Angkor), talking with the user by voice. "
+    "You are Virgo, an AI assistant made by KSN ({name}), talking with the user by voice. "
     "Reply in the user's language: Khmer (in Khmer script) when they speak Khmer, otherwise English. "
     "Answer in one to three short spoken sentences, like a friendly person on the phone: no lists, "
     "no markdown, no emoji. Offer more detail only if they ask. Say so when you are not sure."
@@ -137,8 +140,22 @@ class Conversation:
         return max(probs, default=0.0)
 
 
-async def handle(ws, chat, speech, vad):
+def split_long(sentence):
+    """A long sentence → parts of about LONG_SENTENCE characters, cut at commas (else spaces)."""
+    parts, rest = [], sentence
+    while len(rest) > LONG_SENTENCE:
+        cut = max((m.end() for m in COMMA.finditer(rest, 30, LONG_SENTENCE)), default=0) or \
+            max((m.end() for m in SPACE.finditer(rest, 30, LONG_SENTENCE)), default=0)
+        if not cut:
+            break
+        parts.append(rest[:cut])
+        rest = rest[cut:]
+    return parts + [rest]
+
+
+async def handle(ws, chat, speech, vad, name="Virgo-1.0-Angkor"):
     conv = Conversation(chat, speech, vad)
+    system = VOICE_SYSTEM.format(name=name)
     talking, silent_for, utterance = False, 0.0, []
 
     async def send(kind, **data):
@@ -158,9 +175,26 @@ async def handle(ws, chat, speech, vad):
         """Streams one answer, speaking each sentence as soon as it's written; `spoken` keeps the text."""
         loop = asyncio.get_running_loop()
         pending = ""
-        stream = conv.chat.stream(history, max_new_tokens=MAX_VOICE_TOKENS, system=VOICE_SYSTEM)
+        stream = conv.chat.stream(history, max_new_tokens=MAX_VOICE_TOKENS, system=system)
         spoke = False
+        # Voice is made in its own task while the answer keeps being written (before, writing waited
+        # for each sentence's voice), and sent in order.
+        queue = asyncio.Queue()
+
+        async def voice_out():
+            while (sentence := await queue.get()) is not None:
+                await speak(sentence)
+        voicing = asyncio.create_task(voice_out())
         await send("state", state="speaking")
+        try:
+            await write(loop, stream, pending, spoken, queue, spoke)
+            await queue.put(None)
+            await voicing
+        finally:
+            voicing.cancel()
+        return spoken["text"]
+
+    async def write(loop, stream, pending, spoken, queue, spoke):
         while True:
             piece = await loop.run_in_executor(None, next, stream, None)
             if piece is None:
@@ -174,10 +208,11 @@ async def handle(ws, chat, speech, vad):
                 done = [phrase] if phrase else []
             for sentence in done:
                 spoke = True
-                await speak(sentence)
+                for part in split_long(sentence):
+                    queue.put_nowait(part)
         if pending.strip():
-            await speak(pending)
-        return spoken["text"]
+            for part in split_long(pending):
+                queue.put_nowait(part)
 
     async def reply_to(text):
         await send("state", state="thinking")
@@ -210,7 +245,7 @@ async def handle(ws, chat, speech, vad):
     async def speak(sentence):
         if not sentence.strip():
             return
-        wave, rate = await asyncio.get_running_loop().run_in_executor(None, conv.speech.tts, sentence.strip())
+        wave, rate = await asyncio.get_running_loop().run_in_executor(None, lambda: conv.speech.tts(sentence.strip(), steps=LIVE_STEPS))
         out = io.BytesIO()
         sf.write(out, wave, rate, format="WAV", subtype="PCM_16")
         await ws.send(out.getvalue())

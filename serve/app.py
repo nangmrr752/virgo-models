@@ -238,4 +238,8 @@ async def realtime(ws: WebSocket):
                 raise StopAsyncIteration
             return message.get("bytes") or message.get("text") or ""
 
-    await handle(Adapter(), load("chat"), load("speech"), _models["vad"])
+    # ?model=virgo-1.0-bayon: that model talks (the server's first model when not given or not here).
+    model = ws.query_params.get("model")
+    model = model if model in chat_models() else next(iter(chat_models()))
+    name = "Virgo-1.0-Bayon" if "bayon" in model else "Virgo-1.0-Angkor"
+    await handle(Adapter(), load_chat(model), load("speech"), _models["vad"], name)
