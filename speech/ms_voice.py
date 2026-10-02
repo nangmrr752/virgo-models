@@ -135,3 +135,81 @@ def voice_for(lang):
     if not woman:
         return english_voice_name()  # the multilingual English voice reads many languages
     return man if os.environ.get("VIRGO_MAIN", "").lower() == "bayon" else woman
+
+
+# ---------- Every language: its own default Microsoft voice ----------
+# VIRGO_VOICE_GENDER=female|male picks which (default: male with Bayon, else female).
+# VIRGO_VOICE_<LANG>=<voice> sets one language by hand, e.g. VIRGO_VOICE_FR=fr-FR-HenriNeural.
+PREFERRED_LOCALE = {"en": "en-US", "zh": "zh-CN", "pt": "pt-BR", "es": "es-ES", "fr": "fr-FR", "de": "de-DE",
+                    "ar": "ar-SA", "it": "it-IT", "nl": "nl-NL", "sv": "sv-SE", "ms": "ms-MY", "ta": "ta-IN"}
+_voice_list = None
+_detector = None
+
+
+def _gender():
+    wanted = os.environ.get("VIRGO_VOICE_GENDER", "").lower()
+    if wanted in ("female", "male"):
+        return wanted.title()
+    return "Male" if os.environ.get("VIRGO_MAIN", "").lower() == "bayon" else "Female"
+
+
+def all_voices():
+    """Every Microsoft neural voice: [{ShortName, Locale, Gender}] (from Azure with a key, else edge-tts)."""
+    global _voice_list
+    if _voice_list is None:
+        try:
+            if os.environ.get("AZURE_SPEECH_KEY"):
+                import json
+
+                region = os.environ.get("AZURE_SPEECH_REGION", "southeastasia")
+                req = urllib.request.Request(f"https://{region}.tts.speech.microsoft.com/cognitiveservices/voices/list",
+                                             headers={"Ocp-Apim-Subscription-Key": os.environ["AZURE_SPEECH_KEY"]})
+                with urllib.request.urlopen(req, timeout=20) as res:
+                    _voice_list = json.loads(res.read())
+            else:
+                import edge_tts
+
+                _voice_list = asyncio.run(edge_tts.list_voices())
+            print(f"Microsoft voices: {len(_voice_list)} in {len({v['Locale'] for v in _voice_list})} languages and regions")
+        except Exception as err:
+            print("Couldn't list Microsoft's voices, using the built-in ones:", err)
+            _voice_list = []
+    return _voice_list
+
+
+def default_voice(lang):
+    """The voice for a language code (ISO 639-1, e.g. "fr", "vi", "th")."""
+    override = os.environ.get(f"VIRGO_VOICE_{lang.upper()}")
+    if override:
+        return override
+    if lang == "km":
+        return voice_name()
+    if lang == "en":
+        return english_voice_name()
+    gender = _gender()
+    voices = [v for v in all_voices() if v.get("Locale", "").lower().split("-")[0] == lang]
+    if voices:
+        preferred = PREFERRED_LOCALE.get(lang, "")
+        voices.sort(key=lambda v: (v.get("Locale") != preferred, v.get("Gender") != gender, "Multilingual" not in v["ShortName"]))
+        return voices[0]["ShortName"]
+    woman, man = OTHER_VOICES.get(lang, (None, None))
+    if woman:
+        return man if gender == "Male" else woman
+    return english_voice_name()  # no voice for it: the multilingual English voice reads many languages
+
+
+def detect_language(text, script_lang):
+    """The language of one part of a reply. Scripts used by many languages (Latin, Cyrillic, Arabic,
+    Devanagari, Chinese characters) are told apart by Lingua; very short bits keep the script's language."""
+    if script_lang not in ("en", "ru", "ar", "hi", "zh") or sum(c.isalpha() for c in text) < 8:
+        return script_lang
+    global _detector
+    try:
+        if _detector is None:
+            from lingua import LanguageDetectorBuilder
+
+            _detector = LanguageDetectorBuilder.from_all_languages().with_low_accuracy_mode().build()
+        found = _detector.detect_language_of(text)
+        return found.iso_code_639_1.name.lower() if found else script_lang
+    except Exception:
+        return script_lang

@@ -214,15 +214,19 @@ class VirgoSpeech:
     def _speak_part(self, lang, text, voice):
         """One language's text with its fallback voice: Khmer (Piseth/Sreymom), English and other Latin-script
         languages (Andrew/Ava), else Microsoft's voice for that language (ms_voice.py)."""
+        try:
+            import ms_voice
+
+            lang = ms_voice.detect_language(text, lang)  # "en" script → fr, vi, es...; "ru" → uk...
+        except Exception:
+            ms_voice = None
         if lang == "km":
             return self._khmer(text)
         if lang == "en":
             return self._english(text, voice)
         try:
-            import ms_voice
-
-            if ms_voice.available():
-                return ms_voice.speak(text, ms_voice.voice_for(lang))
+            if ms_voice and ms_voice.available():
+                return ms_voice.speak(text, ms_voice.default_voice(lang))
         except Exception as err:
             print(f"No {lang} voice, reading it with the English voice:", err)
         return self._english(text, voice)
