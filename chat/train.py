@@ -79,9 +79,12 @@ def main():
     four_bit = gpu and not args.full_precision
     model = load_base(args.base, four_bit)
     if four_bit:
-        from peft import prepare_model_for_kbit_training
-
-        model = prepare_model_for_kbit_training(model)
+        # Not peft's prepare_model_for_kbit_training: it turns every unquantized weight into float32,
+        # and Gemma 3's 262k-word embedding alone then takes 4 GB (12B) to 5.6 GB (27B) of GPU memory.
+        # Gradient checkpointing (activations recomputed instead of kept) is what's needed.
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+        model.enable_input_require_grads()
+        model.config.use_cache = False
 
     # Gemma's chat template has no system role: fold the system message into the first user turn.
     def to_text(example):
@@ -113,6 +116,7 @@ def main():
             # warmup_steps works on every transformers version (warmup_ratio was removed in newer ones)
             warmup_steps=max(1, int(0.05 * math.ceil(len(ds) / 16) * args.epochs)),
             logging_steps=10, save_strategy="no", report_to=[],
+            gradient_checkpointing=four_bit, gradient_checkpointing_kwargs={"use_reentrant": False} if four_bit else None,
             bf16=gpu and torch.cuda.is_bf16_supported(), fp16=gpu and not torch.cuda.is_bf16_supported(),
         ),
         train_dataset=ds,
