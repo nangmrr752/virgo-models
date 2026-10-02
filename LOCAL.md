@@ -18,6 +18,7 @@ Face first: [gemma-3-12b-it](https://huggingface.co/google/gemma-3-12b-it), [gem
 tmux                                                          # keeps training going if you disconnect
 bash /opt/virgo/virgo-models/scripts/train_local.sh bayon 27b  # → Virgo-1.0-Bayon (Gemma 3 27B, smarter than Angkor; ~3-5 h on a 4090)
 bash /opt/virgo/virgo-models/scripts/train_local.sh angkor 12b    # → Virgo-1.0-Angkor-12B
+bash /opt/virgo/virgo-models/scripts/train_local.sh voice        # → Virgo-1.0-Angkor-Voice: a steadier live voice (VoxCPM2 LoRA, ~1-2 h; not while another training runs)
 ```
 Each run: pulls the latest code and data (plus the Gemma 27B examples if you made them), trains, scores
 Virgo, and uploads the model privately to Hugging Face. Out of memory? add `--max-len 768`.
