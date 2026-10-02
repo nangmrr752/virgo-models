@@ -2,7 +2,8 @@
 
     uvicorn serve.app:app --host 0.0.0.0 --port 8000
 
-  POST /v1/chat        {"messages": [...], "model": "virgo-1.0-bayon"}    → {"reply": "..."}  (model: optional)
+  POST /v1/chat        {"messages": [...], "model": "virgo-1.0-bayon"}    → {"reply": "..."}  (model: optional;
+                       "stream": true → NDJSON lines {"t": "..."} as it writes)
   POST /v1/tts         {"text": "សួស្តី", "voice": "af_heart"}              → audio/wav
   POST /v1/stt         audio file (form field "file"), ?language=khmer     → {"text": "..."}
   POST /v1/transcribe  audio file (form field "file"), ?srt=1              → {"segments": [...]} or .srt
@@ -17,13 +18,15 @@ Models load the first time they're used, so the server starts fast and only uses
 abilities people actually call. Set VIRGO_API_KEY to require "Authorization: Bearer <key>".
 """
 import io
+import json
+import threading
 import os
 import sys
 import tempfile
 
 import soundfile as sf
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, WebSocket
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
@@ -31,6 +34,7 @@ sys.path += [os.path.join(ROOT, d) for d in ("chat", "speech", "image", "video",
 
 app = FastAPI(title="Virgo-1.0-Angkor", version="1.0.0")
 _models = {}
+_locks = {}
 
 
 def chat_models():
@@ -120,6 +124,7 @@ class ChatBody(BaseModel):
     model: str | None = None
     max_tokens: int = 512
     temperature: float = 0.7
+    stream: bool = False  # true: NDJSON lines {"t": "piece"} as the answer is written
 
 
 class TtsBody(BaseModel):
@@ -162,7 +167,18 @@ def chat(body: ChatBody):
     if not body.messages:
         raise HTTPException(400, "No messages.")
     bot = load_chat(body.model)
-    return {"model": body.model or next(iter(chat_models())), "reply": bot.reply(body.messages, min(body.max_tokens, 2048), body.temperature)}
+    lock = _locks.setdefault(id(bot), threading.Lock())  # one answer at a time per model: no GPU contention
+    max_tokens = min(body.max_tokens, 2048)
+    if body.stream:
+        def pieces():
+            with lock:
+                for piece in bot.stream(body.messages, max_tokens, body.temperature):
+                    if piece:
+                        yield json.dumps({"t": piece}, ensure_ascii=False) + "\n"
+        return StreamingResponse(pieces(), media_type="application/x-ndjson")
+    with lock:
+        reply = bot.reply(body.messages, max_tokens, body.temperature)
+    return {"model": body.model or next(iter(chat_models())), "reply": reply}
 
 
 @app.post("/v1/tts", dependencies=[Depends(auth)])
