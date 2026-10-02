@@ -132,14 +132,19 @@ if os.environ.get("USE_VIRGO_VOICE", "1") != "0":
         subprocess.run(["uv", "pip", "install", "-q", "--python", python, "torchcodec==0.2.*"])
     subprocess.run([python, "-c", "from huggingface_hub import snapshot_download; snapshot_download('openbmb/VoxCPM2')"], check=True)
     os.environ["VIRGO_VOX_PYTHON"] = python
-    # Bayon's own voice when Bayon is the chat model and it has one (train_local.sh voice bayon).
-    voice_repo = f"{me}/Virgo-1.0-Angkor-Voice"
-    if bayon_only:
+    # Which voice: Virgo-Bakong-{VIRGO_LIVE_VERSION}-Voice when it exists (train_local.sh voice bakong),
+    # else Bayon's own voice when Bayon is the chat model (voice bayon), else Virgo-1.0-Angkor-Voice.
+    # VIRGO_VOICE_REPO=<name> picks one by hand.
+    def has_voice(name):
         try:
-            if api.file_exists(f"{me}/Virgo-1.0-Bayon-Voice", "voice.wav"):
-                voice_repo = f"{me}/Virgo-1.0-Bayon-Voice"
+            return api.file_exists(f"{me}/{name}", "voice.wav")
         except Exception:
-            pass
+            return False
+
+    live_version = os.environ.get("VIRGO_LIVE_VERSION", "2.0").strip()
+    candidates = [os.environ.get("VIRGO_VOICE_REPO", ""), f"Virgo-Bakong-{live_version}-Voice",
+                  "Virgo-1.0-Bayon-Voice" if bayon_only else "", "Virgo-1.0-Angkor-Voice"]
+    voice_repo = f"{me}/" + next((c for c in candidates if c and has_voice(c)), "Virgo-1.0-Angkor-Voice")
     os.environ["VIRGO_VOX_REPO"] = voice_repo
     # Each voice keeps its own folder, so switching voices never mixes their files.
     os.environ["VIRGO_VOX_DIR"] = link_to_workspace("speech/out/" + voice_repo.split("/")[1].lower())
