@@ -21,6 +21,8 @@ LOG="$ROOT/logs/Virgo-1.0-Angkor-Hearing-$(date +%Y%m%d-%H%M).log"
 mkdir -p "$ROOT/logs"
 {
   echo "== Training Virgo's hearing from $BASE ($(nvidia-smi --query-gpu=name --format=csv,noheader)) =="
+  # Audio libraries the hearing training needs (the chat training environment doesn't have them).
+  python -c "import soundfile, librosa" 2>/dev/null || python -m pip install -q soundfile librosa
   # All of Whisper (not a small add-on): the 4090 has room, and it learns Khmer much better.
   PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python -u speech/finetune_stt.py \
     --base "$BASE" --full --lr 1e-5 --steps "${VIRGO_HEARING_STEPS:-6000}" --batch 8 \
