@@ -64,7 +64,8 @@ def load_chat(model=None):
         index = list(models).index(model)
         gpu = 0 if gpus <= 1 or index == 0 else gpus - 1 - (index - 1) % (gpus - 1)
         folder = models[model]
-        _models[key] = VirgoChat(adapter=folder if os.path.isdir(folder) else None, gpu=gpu)
+        name = "Virgo-1.0-Bayon" if "bayon" in model else "Virgo-1.0-Angkor"
+        _models[key] = VirgoChat(adapter=folder if os.path.isdir(folder) else None, gpu=gpu, name=name)
         print(f"Chat model {model} ready on GPU {gpu}")
     return _models[key]
 
