@@ -5,3 +5,4 @@ uvicorn[standard]>=0.30
 python-multipart
 soundfile>=0.12
 edge-tts==7.2.8  # a version known to work; Microsoft's Khmer voices (Sreymom, Piseth) as the fallback voice; see speech/ms_voice.py
+lingua-language-detector>=2.0  # tells languages apart (French, Vietnamese...) so each gets its own voice
