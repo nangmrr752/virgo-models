@@ -28,6 +28,37 @@ STT_LANGUAGES = [c.strip() for c in os.environ.get("VIRGO_STT_LANGUAGES", "km,en
 WHISPER_NAMES = {"km": "khmer", "en": "english"}
 
 
+LATIN_RUN = re.compile(r"[A-Za-z][A-Za-z0-9'’.\-]*(?:[\s,]+[A-Za-z][A-Za-z0-9'’.\-]*)*")
+
+
+def split_languages(text):
+    """Text → [(lang, part)] in order: "km" for Khmer (with its numbers and punctuation), "en" for English
+    words. Only runs of Latin letters become English; everything else stays with the Khmer around it."""
+    if not KHMER.search(text):
+        return [("en", text)]
+    parts, last = [], 0
+    for m in LATIN_RUN.finditer(text):
+        if sum(c.isalpha() for c in m.group(0)) < 2:  # a single letter stays with the Khmer
+            continue
+        if text[last:m.start()].strip():
+            parts.append(("km", text[last:m.start()]))
+        parts.append(("en", m.group(0)))
+        last = m.end()
+    if text[last:].strip():
+        parts.append(("km", text[last:]))
+    merged = []  # join neighbours of the same language; drop parts with nothing to say
+    for lang, part in parts:
+        if not re.search(r"\w", part):
+            if merged:
+                merged[-1] = (merged[-1][0], merged[-1][1] + part)
+            continue
+        if merged and merged[-1][0] == lang:
+            merged[-1] = (lang, merged[-1][1] + part)
+        else:
+            merged.append((lang, part))
+    return [(lang, part.strip()) for lang, part in merged] or [("km", text)]
+
+
 class VirgoSpeech:
     def __init__(self, stt_model=None):
         self.stt_model = stt_model or (STT_TUNED if os.path.isdir(STT_TUNED) else STT_BASE)
@@ -92,7 +123,14 @@ class VirgoSpeech:
             start = torch.tensor([[model.generation_config.decoder_start_token_id]], device=model.device)
             logits = model(input_features=features, decoder_input_ids=start).logits[0, -1]
             ids = [tokenizer.convert_tokens_to_ids(f"<|{c}|>") for c in codes]
-            best = codes[int(torch.argmax(logits[ids]))]
+            scores = logits[ids]
+            best = codes[int(torch.argmax(scores))]
+            # Khmer mixed with English words is still Khmer: unless another language is clearly more
+            # likely (VIRGO_STT_KHMER_BIAS, default 2.0 logits), Khmer wins.
+            if "km" in codes and best != "km":
+                bias = float(os.environ.get("VIRGO_STT_KHMER_BIAS", "2.0"))
+                if float(scores.max() - scores[codes.index("km")]) < bias:
+                    best = "km"
             return WHISPER_NAMES.get(best, best)
         except Exception as err:  # fall back to Whisper's free choice
             print("Virgo speech: language pick failed:", repr(err))
@@ -124,9 +162,22 @@ class VirgoSpeech:
             except Exception as err:
                 print("Virgo-1.0-Angkor-Voice failed, using the other voices for now:", err)
                 self._vox = False
-        if KHMER.search(text):
-            return self._khmer(text)
-        return self._english(text, voice)
+        parts = split_languages(text)
+        if len(parts) == 1:
+            lang, part = parts[0]
+            return self._khmer(part) if lang == "km" else self._english(part, voice)
+        # Khmer mixed with English: each part in its own voice (Khmer: Piseth/Sreymom, English: Andrew/Ava),
+        # joined into one clip with a short pause.
+        waves, rate = [], None
+        for lang, part in parts:
+            wave, r = self._khmer(part) if lang == "km" else self._english(part, voice)
+            wave = np.asarray(wave, np.float32).reshape(-1)
+            if rate is None:
+                rate = r
+            elif r != rate:
+                wave = np.interp(np.arange(0, len(wave), r / rate), np.arange(len(wave)), wave).astype(np.float32)
+            waves += [wave, np.zeros(int(0.06 * rate), np.float32)]
+        return np.concatenate(waves[:-1]), rate
 
     def _vox_voice(self):
         if getattr(self, "_vox", None) is None:
