@@ -124,7 +124,7 @@ def design_voice(ref, repo, description, tries=4, checker=None, steps=10):
     for name in ("voice.wav", "voice.json"):
         api.upload_file(path_or_fileobj=os.path.join(ref, name), path_in_repo=name, repo_id=repo, commit_message="Voice sample")
     print(f"✅ New voice sample saved to {repo} (listen: {os.path.join(ref, 'voice.wav')})", flush=True)
-    del model
+    return model  # reused for the clips: a second copy doesn't fit a 16 GB T4
 
 
 def main():
@@ -155,6 +155,7 @@ def main():
     from huggingface_hub import snapshot_download
 
     checker = Checker(args.check) if args.check else None
+    model = None
     ref = os.path.join(args.out, "reference")  # only the voice sample: no old LoRA while making clips
     try:
         snapshot_download(args.repo, local_dir=ref, allow_patterns=["voice.wav", "voice.json"])
@@ -163,12 +164,13 @@ def main():
     if not os.path.exists(os.path.join(ref, "voice.wav")):
         if not args.design:
             sys.exit("❌ No voice.wav in " + args.repo + ": make Virgo's voice first (speech/design_voice.ipynb).")
-        design_voice(ref, args.repo, args.design, args.design_tries, checker, args.steps)
+        model = design_voice(ref, args.repo, args.design, args.design_tries, checker, args.steps)
     sentences = khmer_sentences(args.data)
     random.Random(7).shuffle(sentences)
     sentences = sentences[: args.count]
     print(f"Making {len(sentences)} clips in Virgo's voice...", flush=True)
-    model = load_model(ref)
+    if model is None:
+        model = load_model(ref)
     settings, prefix = voice_settings(ref, "km")
     rate = model.tts_model.sample_rate
     kept = dropped = 0
