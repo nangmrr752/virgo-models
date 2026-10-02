@@ -29,6 +29,15 @@ esac
 if [ "$WHO" = bakong ]; then NAME="Virgo-Bakong-${VIRGO_LIVE_VERSION:-2.0}-Voice"; else NAME="Virgo-1.0-${WHO^}-Voice"; fi
 REPO="$ME/$NAME"
 WORK="$ROOT/voice-train"; [ "$WHO" != angkor ] && WORK="$ROOT/voice-train-$WHO"
+# Virgo-Bakong: the cleanest voice. Twice the clips, made with more VoxCPM2 steps, each one checked by
+# Whisper (Virgo's hearing) and dropped if it was said wrong; 8 tries for the voice sample; twice the
+# training. VIRGO_VOICE_STEPS changes the training length.
+QUALITY=()
+if [ "$WHO" = bakong ]; then
+  HEARING=$(python -c "from huggingface_hub import HfApi; r='$ME/Virgo-1.0-Angkor-Hearing'; print(r if HfApi().file_exists(r, 'config.json') else 'openai/whisper-large-v3-turbo')" 2>/dev/null || echo openai/whisper-large-v3-turbo)
+  QUALITY=(--count 1200 --steps 16 --design-tries 8 --check "$HEARING")
+  ITERS="${VIRGO_VOICE_STEPS:-3000}"
+fi
 ENVDIR="$ROOT/vox-env"; PY="$ENVDIR/bin/python"
 LOG="$ROOT/logs/$NAME-$(date +%Y%m%d-%H%M).log"
 mkdir -p "$WORK" "$ROOT/logs"
@@ -55,7 +64,7 @@ mkdir -p "$WORK" "$ROOT/logs"
   BASE=$("$PY" -c "from huggingface_hub import snapshot_download; print(snapshot_download('openbmb/VoxCPM2'))")
 
   echo "== Clips =="
-  "$PY" -u speech/make_voice_data.py --repo "$REPO" --out "$WORK" "${DESIGN[@]}" "$@"
+  "$PY" -u speech/make_voice_data.py --repo "$REPO" --out "$WORK" "${DESIGN[@]}" "${QUALITY[@]}" "$@"
 
   echo "== Training ($ITERS steps) =="
   rm -rf "$WORK/run"
