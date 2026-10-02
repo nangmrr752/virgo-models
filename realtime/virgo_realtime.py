@@ -41,7 +41,8 @@ MAX_VOICE_TOKENS = 220
 VOICE_SYSTEM = (
     "You are Virgo, an AI assistant made by KSN ({name}), talking with the user by voice. "
     "Reply in the user's language: Khmer (in Khmer script) when they speak Khmer, English when they speak English, "
-    "and the same for any other language they speak. "
+    "and the same for any other language they speak. If they ask you to speak a language (\"speak English\", "
+    "\"និយាយភាសាអង់គ្លេស\"), use it from then on until they ask for another. "
     "Answer in one to three short spoken sentences, like a friendly person on the phone: no lists, "
     "no markdown, no emoji. Offer more detail only if they ask. Say so when you are not sure."
 )
@@ -124,6 +125,9 @@ def with_results(history, found):
 
 
 KHMER_TEXT = re.compile(r"[\u1780-\u17ff]")
+# Asking for another language: "speak English", "in French", "និយាយភាសាអង់គ្លេស", "ជាភាសាចិន"...
+SWITCH_LANGUAGE = re.compile(r"\b(speak|talk|answer|reply|switch|change)\b.{0,20}\b(english|french|chinese|thai|japanese|korean|vietnamese|spanish|german|language)\b"
+                             r"|\bin (english|french|chinese|thai|japanese|korean|vietnamese|spanish|german)\b|ភាសា(អង់គ្លេស|បារាំង|ចិន|ថៃ|ជប៉ុន|កូរ៉េ|វៀតណាម)|អង់គ្លេស", re.I)
 
 
 class Conversation:
@@ -301,6 +305,9 @@ async def handle(ws, chat, speech, vad, name="Virgo-1.0-Angkor"):
                 await send("reply", text="Sorry, I didn't catch that. Please say it again.")
                 await send("state", state="listening")
                 continue
+            # "Speak English" / "និយាយភាសាអង់គ្លេស" (or another language): stop listening for Khmer only.
+            if text and conv.language and SWITCH_LANGUAGE.search(text):
+                conv.language = None
             if text and not heard_nothing(text):
                 await send("heard", text=text)
                 conv.speaking_task = asyncio.create_task(answer(text))
