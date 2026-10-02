@@ -11,6 +11,9 @@ services:
       VIRGO_TUNNEL: external        # the tunnel is the "tunnel" service below
     volumes:
       - ${VIRGO_DATA:-/opt/virgo/docker}:/workspace   # models, voice, caches: kept across restarts
+      # The Hugging Face downloads already on this machine (training uses the same folder), so Gemma
+      # 3 27B (~55 GB) and the others aren't downloaded a second time.
+      - ${HF_CACHE:-/opt/virgo/hf-cache}:/workspace/hf-cache
     deploy:
       resources:
         reservations:
