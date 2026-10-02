@@ -60,10 +60,24 @@ class VoxVoice:
         log = open(self.log_path, "w")
         self.worker = subprocess.Popen([python, os.path.abspath(__file__), "--serve", folder],
                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log, text=True, encoding="utf-8")
-        ready = json.loads(self.worker.stdout.readline() or "{}")
+        ready = self._read()
         if "error" in ready or not ready:
             raise RuntimeError(f"Virgo voice: {ready.get('error') or self.why_stopped()}")
         print("Virgo-1.0-Angkor-Voice is ready:", ready)
+
+    def _read(self):
+        """The worker's next JSON line ({} if it stopped), skipping any other output."""
+        while True:
+            line = self.worker.stdout.readline()
+            if not line:
+                return {}
+            try:
+                data = json.loads(line)
+            except ValueError:
+                print("Virgo voice worker:", line.rstrip()[:200])
+                continue
+            if isinstance(data, dict):
+                return data
 
     def why_stopped(self):
         """Why the worker ended: killed for memory, or the last lines it printed."""
@@ -86,7 +100,7 @@ class VoxVoice:
                 raise RuntimeError(f"Virgo voice: {self.why_stopped()}")
             self.worker.stdin.write(json.dumps({"text": text, "lang": lang, **({"steps": int(steps)} if steps else {})}, ensure_ascii=False) + "\n")
             self.worker.stdin.flush()
-            answer = json.loads(self.worker.stdout.readline() or '{"error": "no answer"}')
+            answer = self._read() or {"error": "no answer"}
         if "error" in answer:
             raise RuntimeError(f"Virgo voice: {answer['error']}")
         try:
@@ -154,6 +168,15 @@ def voice_settings(folder, lang="km"):
 def serve(folder):
     import soundfile as sf
 
+    # Only the answers go to stdout (one JSON line each). Anything the libraries print (VoxCPM, torch,
+    # Kokoro) goes to stderr, the worker's log, so it can't be mistaken for an answer.
+    answers = sys.stdout
+    sys.stdout = sys.stderr
+
+    def reply(data):
+        answers.write(json.dumps(data) + "\n")
+        answers.flush()
+
     try:
         import inspect
         import random
@@ -175,9 +198,9 @@ def serve(folder):
             except Exception as err:  # not installed: VoxCPM2 speaks English too
                 print("Kokoro (English voice) unavailable, VoxCPM2 speaks English:", repr(err), file=sys.stderr)
     except Exception as err:
-        print(json.dumps({"error": repr(err)}), flush=True)
+        reply({"error": repr(err)})
         return
-    print(json.dumps({"rate": rate, "sample": bool(voices["km"][0]), "steps": steps, "english": "kokoro" if english else "voxcpm2"}), flush=True)
+    reply({"rate": rate, "sample": bool(voices["km"][0]), "steps": steps, "english": "kokoro" if english else "voxcpm2"})
     for line in sys.stdin:
         try:
             request = json.loads(line)
@@ -194,9 +217,9 @@ def serve(folder):
             fd, path = tempfile.mkstemp(suffix=".wav")
             os.close(fd)
             sf.write(path, wave, out_rate)
-            print(json.dumps({"path": path}), flush=True)
+            reply({"path": path})
         except Exception as err:
-            print(json.dumps({"error": repr(err)}), flush=True)
+            reply({"error": repr(err)})
 
 
 if __name__ == "__main__":
