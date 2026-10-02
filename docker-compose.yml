@@ -17,6 +17,8 @@ services:
           devices:
             - { driver: nvidia, count: all, capabilities: [gpu] }
     shm_size: "8gb"
+    ports:
+      - "127.0.0.1:8000:8000"     # only this machine; the tunnel reaches it at localhost:8000
 
   tunnel:
     image: cloudflare/cloudflared:latest
@@ -24,6 +26,6 @@ services:
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN}
-    # Shares the virgo container's network, so the tunnel's existing "http://localhost:8000" still works.
-    network_mode: "service:virgo"
-    depends_on: [virgo]
+    # The host's network, so the tunnel's "http://localhost:8000" reaches the virgo container's port.
+    # (Not virgo's own network: that breaks every time the virgo container restarts.)
+    network_mode: host
