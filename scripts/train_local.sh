@@ -4,11 +4,13 @@
 #   bash scripts/train_local.sh bayon 12b     # Virgo-1.0-Bayon      (also: bayon 4b → Virgo-1.0-Bayon-4B)
 #   bash scripts/train_local.sh angkor 12b    # Virgo-1.0-Angkor-12B (also: angkor 4b → Virgo-1.0-Angkor)
 #
-# Needs scripts/local_setup.sh first. Output in $VIRGO_HOME/out/<model>, log in $VIRGO_HOME/logs.
+# Needs scripts/local_setup.sh first. Output in <data>/out/<model>, log in <data>/logs (data: /opt/virgo-data
+# when the code is in /opt/virgo-models).
 # Extra options go to chat/train.py, e.g. --epochs 2 or --max-len 768 (if it runs out of memory).
 set -euo pipefail
-ROOT="${VIRGO_HOME:-/opt/virgo}"
-source "$ROOT/env.sh"
+CODE="$(cd "$(dirname "$0")/.." && pwd)"
+source "$CODE/env.sh"   # written by local_setup.sh: sets VIRGO_HOME (the data folder) and the conda env
+ROOT="$VIRGO_HOME"
 WHICH="${1:-bayon}"; SIZE="${2:-12b}"; shift $(( $# > 2 ? 2 : $# ))
 case "$SIZE" in 12b) BASE=google/gemma-3-12b-it ;; 4b) BASE=google/gemma-3-4b-it ;; *) echo "Size: 12b or 4b"; exit 1 ;; esac
 case "$WHICH-$SIZE" in
