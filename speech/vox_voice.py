@@ -76,15 +76,15 @@ class VoxVoice:
             return f"the voice worker was killed (exit {code}): out of memory (RAM). Last lines:\n{tail}"
         return f"the voice worker stopped (exit {code}). Last lines:\n{tail}"
 
-    def __call__(self, text, lang=None):
-        """lang: "km" or "en" (worked out from the text when not given)."""
+    def __call__(self, text, lang=None, steps=None):
+        """lang: "km" or "en" (worked out from the text when not given). steps: fewer is faster."""
         import soundfile as sf
 
         lang = lang or ("km" if KHMER.search(text) else "en")
         with self.lock:
             if self.worker.poll() is not None:
                 raise RuntimeError(f"Virgo voice: {self.why_stopped()}")
-            self.worker.stdin.write(json.dumps({"text": text, "lang": lang}, ensure_ascii=False) + "\n")
+            self.worker.stdin.write(json.dumps({"text": text, "lang": lang, **({"steps": int(steps)} if steps else {})}, ensure_ascii=False) + "\n")
             self.worker.stdin.flush()
             answer = json.loads(self.worker.stdout.readline() or '{"error": "no answer"}')
         if "error" in answer:
@@ -188,7 +188,7 @@ def serve(folder):
             else:
                 settings, prefix = voices["en" if lang == "en" else "km"]
                 random.seed(7); np.random.seed(7); torch.manual_seed(7)  # the same voice every time
-                args = {"cfg_value": 2.0, "inference_timesteps": steps, "seed": 7, **settings}
+                args = {"cfg_value": 2.0, "inference_timesteps": request.get("steps") or steps, "seed": 7, **settings}
                 wave = model.generate(text=prefix + text, **{k: v for k, v in args.items() if k in accepted})
                 out_rate = rate
             fd, path = tempfile.mkstemp(suffix=".wav")
