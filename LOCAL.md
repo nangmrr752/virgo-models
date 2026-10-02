@@ -19,6 +19,7 @@ tmux                                                          # keeps training g
 bash /opt/virgo/virgo-models/scripts/train_local.sh bayon 27b  # → Virgo-1.0-Bayon (Gemma 3 27B, smarter than Angkor; ~3-5 h on a 4090)
 bash /opt/virgo/virgo-models/scripts/train_local.sh angkor 12b    # → Virgo-1.0-Angkor-12B
 bash /opt/virgo/virgo-models/scripts/train_local.sh hearing      # → Virgo-1.0-Angkor-Hearing: better Khmer hearing (all of Whisper, ~2-4 h; uploads only if its score improves)
+bash /opt/virgo/virgo-models/scripts/train_local.sh voice bakong # → Virgo-Bakong-2.0-Voice: the live voice's own voice (used everywhere once it exists)
 bash /opt/virgo/virgo-models/scripts/train_local.sh voice bayon  # → Virgo-1.0-Bayon-Voice: Bayon's own voice (used when VIRGO_MAIN=bayon)
 bash /opt/virgo/virgo-models/scripts/train_local.sh voice        # → Virgo-1.0-Angkor-Voice: a steadier live voice (VoxCPM2 LoRA, ~1-2 h; not while another training runs)
 ```

@@ -5,6 +5,7 @@
 #   bash scripts/train_local.sh voice                       # steadier Virgo voice (clips made in Virgo's own voice)
 #   bash scripts/train_local.sh voice --recordings <folder> # your own recordings (.wav + metadata.csv)
 #   bash scripts/train_local.sh voice bayon                 # Bayon's own voice (Virgo-1.0-Bayon-Voice), new from a description
+#   bash scripts/train_local.sh voice bakong                # Virgo-Bakong-2.0-Voice: the live voice's own voice
 #   VIRGO_VOICE_DESCRIBE="A woman, ..." bash scripts/train_local.sh voice bayon   # choose how it sounds
 #
 # Run it when nothing else is training: it needs most of a 24 GB GPU. About 1-2 hours.
@@ -15,16 +16,19 @@ ROOT="$VIRGO_HOME"
 ITERS="${VIRGO_VOICE_STEPS:-1500}"
 cd "$CODE"
 ME=$(python -c "from huggingface_hub import HfApi; print(HfApi().whoami()['name'])")
-# `voice bayon`: Bayon's own voice (Virgo-1.0-Bayon-Voice), made from a description the first time
-# (VIRGO_VOICE_DESCRIBE to choose it). Otherwise Virgo's voice (Virgo-1.0-Angkor-Voice).
+# `voice bayon`: Bayon's own voice (Virgo-1.0-Bayon-Voice). `voice bakong`: the live voice's own voice,
+# Virgo-Bakong-{VIRGO_LIVE_VERSION}-Voice (2.0), used for all of Virgo's speech once it exists. Both are
+# made from a description the first time (VIRGO_VOICE_DESCRIBE to choose). Otherwise Virgo-1.0-Angkor-Voice.
 WHO=angkor; DESIGN=()
-if [ "${1:-}" = bayon ]; then
-  shift; WHO=bayon
-  DESIGN=(--design "${VIRGO_VOICE_DESCRIBE:-A young man, calm and confident, warm clear voice, natural friendly pace}")
-fi
-NAME="Virgo-1.0-${WHO^}-Voice"
+case "${1:-}" in
+  bayon) shift; WHO=bayon
+    DESIGN=(--design "${VIRGO_VOICE_DESCRIBE:-A young man, calm and confident, warm clear voice, natural friendly pace}") ;;
+  bakong) shift; WHO=bakong
+    DESIGN=(--design "${VIRGO_VOICE_DESCRIBE:-A young woman, bright and lively, warm clear voice, natural conversational pace}") ;;
+esac
+if [ "$WHO" = bakong ]; then NAME="Virgo-Bakong-${VIRGO_LIVE_VERSION:-2.0}-Voice"; else NAME="Virgo-1.0-${WHO^}-Voice"; fi
 REPO="$ME/$NAME"
-WORK="$ROOT/voice-train"; [ "$WHO" = bayon ] && WORK="$ROOT/voice-train-bayon"
+WORK="$ROOT/voice-train"; [ "$WHO" != angkor ] && WORK="$ROOT/voice-train-$WHO"
 ENVDIR="$ROOT/vox-env"; PY="$ENVDIR/bin/python"
 LOG="$ROOT/logs/$NAME-$(date +%Y%m%d-%H%M).log"
 mkdir -p "$WORK" "$ROOT/logs"
