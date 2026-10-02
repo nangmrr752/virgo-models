@@ -154,19 +154,39 @@ class VirgoSpeech:
         return wave.astype(np.float32), model.config.sampling_rate
 
     def _khmer(self, text):
-        # Virgo's own Khmer voice (speech/train_voice.py, commercial-safe) when it's set up; otherwise
-        # Meta MMS, which is non-commercial (CC BY-NC 4.0).
+        # When Virgo's voice (VoxCPM2) isn't running: Virgo's small own Khmer voice (train_voice.py) when
+        # it's set up, else Microsoft's Sreymom / Piseth (ms_voice.py). Meta MMS is non-commercial
+        # (CC BY-NC 4.0): only with VIRGO_ALLOW_MMS=1.
         if self._khmer_tts is None:
-            self._khmer_tts = self._own_khmer_voice() or ("mms", self._mms("facebook/mms-tts-khm"))
+            self._khmer_tts = self._own_khmer_voice() or self._microsoft_voice() or self._mms_voice()
         kind, engine = self._khmer_tts
-        if kind == "virgo":
-            try:
-                return engine(text)
-            except Exception as err:
-                print("Virgo's Khmer voice failed, using MMS for now:", err)
-                self._khmer_tts = ("mms", self._mms("facebook/mms-tts-khm"))
-                return self._speak_mms(self._khmer_tts[1], text)
-        return self._speak_mms(engine, text)
+        if kind == "mms":
+            return self._speak_mms(engine, text)
+        try:
+            return engine(text)
+        except Exception as err:
+            if kind == "microsoft" or not self._microsoft_voice():
+                raise RuntimeError(f"Khmer voice failed: {err}") from err
+            print("Virgo's Khmer voice failed, using Microsoft's for now:", err)
+            self._khmer_tts = self._microsoft_voice()
+            return self._khmer_tts[1](text)
+
+    @staticmethod
+    def _microsoft_voice():
+        try:
+            import ms_voice
+
+            if ms_voice.available():
+                print("Khmer fallback voice: Microsoft", ms_voice.voice_name(), "(Azure)" if os.environ.get("AZURE_SPEECH_KEY") else "(edge-tts)")
+                return ("microsoft", ms_voice.speak)
+        except Exception as err:
+            print("Microsoft's Khmer voice isn't available:", err)
+        return None
+
+    def _mms_voice(self):
+        if os.environ.get("VIRGO_ALLOW_MMS") != "1":
+            raise RuntimeError("No Khmer voice: install edge-tts, set AZURE_SPEECH_KEY, or turn on Virgo's voice.")
+        return ("mms", self._mms("facebook/mms-tts-khm"))
 
     @staticmethod
     def _own_khmer_voice():
@@ -176,7 +196,7 @@ class VirgoSpeech:
             if khmer_voice.available():
                 return ("virgo", khmer_voice.KhmerVoice())
         except Exception as err:
-            print("Virgo's own Khmer voice isn't available, using MMS:", err)
+            print("Virgo's own Khmer voice isn't available:", err)
         return None
 
     def _english(self, text, voice):

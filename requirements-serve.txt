@@ -4,3 +4,4 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 python-multipart
 soundfile>=0.12
+edge-tts>=7.0  # Microsoft's Khmer voices (Sreymom, Piseth) as the fallback voice; see speech/ms_voice.py
