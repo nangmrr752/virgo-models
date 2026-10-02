@@ -34,4 +34,6 @@ everything is kept in `/opt/virgo/docker`.
 - Stop: `docker compose down`
 - Stop any other Virgo server (RunPod, Kaggle, `start_server.sh`) that uses the same tunnel token.
 - Don't train while it runs: the server uses the GPU.
-- On one 24 GB GPU it serves Angkor, hearing and voice; Bayon 27B needs a second GPU or 40 GB+.
+- On one 24 GB GPU it serves Angkor, hearing and voice. For Bayon (smarter) instead, add `VIRGO_MAIN=bayon` to `.env`
+  and run `docker compose up -d`: the website then offers Bayon in chat and live voice. Both together need a
+  second GPU or 40 GB+.

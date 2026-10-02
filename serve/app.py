@@ -52,6 +52,8 @@ def load_chat(model=None):
 
     models = chat_models()
     model = model or next(iter(models))
+    if model not in models and model.startswith("virgo-") and os.environ.get("VIRGO_MAIN", "").lower() == "bayon":
+        model = next(iter(models))  # Bayon alone (VIRGO_MAIN=bayon): it answers for Angkor too
     if model not in models:
         raise HTTPException(404, f"No chat model {model!r} here. This server has: {', '.join(models)}.")
     key = f"chat:{model}"
