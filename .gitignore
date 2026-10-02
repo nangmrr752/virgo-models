@@ -12,3 +12,4 @@ __pycache__/
 *.png
 !docs/*.png
 env.sh
+.env
