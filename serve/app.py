@@ -73,8 +73,11 @@ def load_chat(model=None):
 def preload():
     """VIRGO_PRELOAD=chat,speech loads those models at start, so the first request isn't slow."""
     names = [n.strip() for n in os.environ.get("VIRGO_PRELOAD", "").split(",") if n.strip()]
-    # Speech (and Virgo's voice) first: the voice needs the most free memory while it loads.
-    for name in sorted(names, key=lambda n: n != "speech"):
+    # Speech (and Virgo's voice) first: the voice needs the most free memory while it loads. With a
+    # big chat model (VIRGO_MAIN=bayon, 27B) the chat goes first instead, so it always starts; if the
+    # voice then doesn't fit, the fallback voices speak and the server keeps running.
+    chat_first = os.environ.get("VIRGO_MAIN", "").lower() == "bayon"
+    for name in sorted(names, key=lambda n: n != ("chat" if chat_first else "speech")):
         load(name)
         if name == "chat":
             for model in list(chat_models())[1:]:
