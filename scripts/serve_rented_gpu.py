@@ -132,7 +132,20 @@ if os.environ.get("USE_VIRGO_VOICE", "1") != "0":
         subprocess.run(["uv", "pip", "install", "-q", "--python", python, "torchcodec==0.2.*"])
     subprocess.run([python, "-c", "from huggingface_hub import snapshot_download; snapshot_download('openbmb/VoxCPM2')"], check=True)
     os.environ["VIRGO_VOX_PYTHON"] = python
-    os.environ["VIRGO_VOX_REPO"] = f"{me}/Virgo-1.0-Angkor-Voice"
+    # Bayon's own voice when Bayon is the chat model and it has one (train_local.sh voice bayon).
+    voice_repo = f"{me}/Virgo-1.0-Angkor-Voice"
+    if bayon_only:
+        try:
+            if api.file_exists(f"{me}/Virgo-1.0-Bayon-Voice", "voice.wav"):
+                voice_repo = f"{me}/Virgo-1.0-Bayon-Voice"
+        except Exception:
+            pass
+    os.environ["VIRGO_VOX_REPO"] = voice_repo
+    # Each voice keeps its own folder, so switching voices never mixes their files.
+    os.environ["VIRGO_VOX_DIR"] = link_to_workspace("speech/out/" + voice_repo.split("/")[1].lower())
+    if voice_repo.endswith("Bayon-Voice"):  # Bayon's default voice is a man's: English (Kokoro) matches
+        os.environ.setdefault("VIRGO_ENGLISH_VOICE", "am_michael")
+    print("🗣️ Voice sample:", voice_repo)
     if len(gpus) > 1:
         os.environ["VIRGO_VOX_DEVICE"] = "cuda:1"
     if not big_gpu and len(gpus) == 1:  # a 16 GB GPU: squeeze chat into 4 bits so the voice fits

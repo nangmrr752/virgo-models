@@ -4,6 +4,8 @@
 #
 #   bash scripts/train_local.sh voice                       # steadier Virgo voice (clips made in Virgo's own voice)
 #   bash scripts/train_local.sh voice --recordings <folder> # your own recordings (.wav + metadata.csv)
+#   bash scripts/train_local.sh voice bayon                 # Bayon's own voice (Virgo-1.0-Bayon-Voice), new from a description
+#   VIRGO_VOICE_DESCRIBE="A woman, ..." bash scripts/train_local.sh voice bayon   # choose how it sounds
 #
 # Run it when nothing else is training: it needs most of a 24 GB GPU. About 1-2 hours.
 set -euo pipefail
@@ -13,13 +15,22 @@ ROOT="$VIRGO_HOME"
 ITERS="${VIRGO_VOICE_STEPS:-1500}"
 cd "$CODE"
 ME=$(python -c "from huggingface_hub import HfApi; print(HfApi().whoami()['name'])")
-REPO="$ME/Virgo-1.0-Angkor-Voice"
-WORK="$ROOT/voice-train"; ENVDIR="$ROOT/vox-env"; PY="$ENVDIR/bin/python"
-LOG="$ROOT/logs/Virgo-1.0-Angkor-Voice-$(date +%Y%m%d-%H%M).log"
+# `voice bayon`: Bayon's own voice (Virgo-1.0-Bayon-Voice), made from a description the first time
+# (VIRGO_VOICE_DESCRIBE to choose it). Otherwise Virgo's voice (Virgo-1.0-Angkor-Voice).
+WHO=angkor; DESIGN=()
+if [ "${1:-}" = bayon ]; then
+  shift; WHO=bayon
+  DESIGN=(--design "${VIRGO_VOICE_DESCRIBE:-A young man, calm and confident, warm clear voice, natural friendly pace}")
+fi
+NAME="Virgo-1.0-${WHO^}-Voice"
+REPO="$ME/$NAME"
+WORK="$ROOT/voice-train"; [ "$WHO" = bayon ] && WORK="$ROOT/voice-train-bayon"
+ENVDIR="$ROOT/vox-env"; PY="$ENVDIR/bin/python"
+LOG="$ROOT/logs/$NAME-$(date +%Y%m%d-%H%M).log"
 mkdir -p "$WORK" "$ROOT/logs"
 
 {
-  echo "== Training Virgo's voice ($(nvidia-smi --query-gpu=name --format=csv,noheader)) =="
+  echo "== Training $NAME ($(nvidia-smi --query-gpu=name --format=csv,noheader)) =="
   # VoxCPM2 needs newer libraries than the rest of Virgo: its own environment (made once).
   [ -d "$ROOT/VoxCPM" ] || git clone -q --depth 1 https://github.com/OpenBMB/VoxCPM "$ROOT/VoxCPM"
   git -C "$ROOT/VoxCPM" pull -q || true
@@ -40,7 +51,7 @@ mkdir -p "$WORK" "$ROOT/logs"
   BASE=$("$PY" -c "from huggingface_hub import snapshot_download; print(snapshot_download('openbmb/VoxCPM2'))")
 
   echo "== Clips =="
-  "$PY" -u speech/make_voice_data.py --repo "$REPO" --out "$WORK" "$@"
+  "$PY" -u speech/make_voice_data.py --repo "$REPO" --out "$WORK" "${DESIGN[@]}" "$@"
 
   echo "== Training ($ITERS steps) =="
   rm -rf "$WORK/run"
