@@ -3,6 +3,7 @@
 #
 #   bash scripts/train_local.sh bayon 27b     # Virgo-1.0-Bayon on Gemma 3 27B, smarter than Angkor (default)
 #                                            #   (also: bayon 12b → Virgo-1.0-Bayon-12B, bayon 4b → Virgo-1.0-Bayon-4B)
+#   bash scripts/train_local.sh voice         # Virgo's live voice (VoxCPM2), see train_voice_local.sh
 #   bash scripts/train_local.sh angkor 12b    # Virgo-1.0-Angkor-12B (also: angkor 4b → Virgo-1.0-Angkor)
 #
 # Needs scripts/local_setup.sh first. Output in <data>/out/<model>, log in <data>/logs (data: /opt/virgo-data
@@ -12,6 +13,7 @@ set -euo pipefail
 CODE="$(cd "$(dirname "$0")/.." && pwd)"
 source "$CODE/env.sh"   # written by local_setup.sh: sets VIRGO_HOME (the data folder) and the conda env
 ROOT="$VIRGO_HOME"
+[ "${1:-}" = voice ] && { shift; exec bash "$CODE/scripts/train_voice_local.sh" "$@"; }  # Virgo's live voice
 WHICH="${1:-bayon}"; DEFAULT_SIZE=12b; [ "$WHICH" = bayon ] && DEFAULT_SIZE=27b; SIZE="${2:-$DEFAULT_SIZE}"; shift $(( $# > 2 ? 2 : $# ))
 case "$SIZE" in 27b) BASE=google/gemma-3-27b-it ;; 12b) BASE=google/gemma-3-12b-it ;; 4b) BASE=google/gemma-3-4b-it ;; *) echo "Size: 27b, 12b or 4b"; exit 1 ;; esac
 EXTRA=""; [ "$SIZE" = 27b ] && EXTRA="--max-len 512"  # 27B in 4 bits fills most of a 24 GB GPU
