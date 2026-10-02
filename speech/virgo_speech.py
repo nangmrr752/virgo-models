@@ -200,21 +200,42 @@ class VirgoSpeech:
         return None
 
     def _english(self, text, voice):
-        # Kokoro sounds most natural; where it can't be installed (e.g. Python 3.13 on Colab), Meta's
-        # MMS English voice is used instead.
+        # Microsoft's neural English voices (ms_voice.py: Ava, or Andrew with Bayon) sound clearest; then
+        # Kokoro when it's installed. Meta's MMS English (robotic, non-commercial) only with VIRGO_ALLOW_MMS=1.
         if self._english_tts is None:
-            try:
-                from kokoro import KPipeline
-
-                self._english_tts = ("kokoro", KPipeline(lang_code="a"))  # American English
-            except Exception:
-                self._english_tts = ("mms", self._mms("facebook/mms-tts-eng"))
+            self._english_tts = self._english_engine()
         kind, engine = self._english_tts
         if kind == "mms":
             return self._speak_mms(engine, text)
+        if kind == "microsoft":
+            try:
+                return engine(text)
+            except Exception as err:
+                print("Microsoft's English voice failed, trying Kokoro:", err)
+                self._english_tts = self._english_engine(skip_microsoft=True)
+                return self._english(text, voice)
         parts = [audio for _, _, audio in engine(text, voice=voice)]
         return np.concatenate(parts).astype(np.float32), 24000
 
+    def _english_engine(self, skip_microsoft=False):
+        if not skip_microsoft:
+            try:
+                import ms_voice
+
+                if ms_voice.available():
+                    print("English fallback voice: Microsoft", ms_voice.english_voice_name())
+                    return ("microsoft", ms_voice.speak_english)
+            except Exception as err:
+                print("Microsoft's English voice isn't available:", err)
+        try:
+            from kokoro import KPipeline
+
+            return ("kokoro", KPipeline(lang_code="a"))  # American English
+        except Exception:
+            pass
+        if os.environ.get("VIRGO_ALLOW_MMS") != "1":
+            raise RuntimeError("No English voice: install edge-tts or kokoro, or set AZURE_SPEECH_KEY.")
+        return ("mms", self._mms("facebook/mms-tts-eng"))
 
 def main():
     p = argparse.ArgumentParser(description="Virgo 1.0 speech")
