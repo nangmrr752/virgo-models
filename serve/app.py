@@ -263,5 +263,7 @@ async def realtime(ws: WebSocket):
     # ?model=virgo-1.0-bayon: that model talks (the server's first model when not given or not here).
     model = ws.query_params.get("model")
     model = model if model in chat_models() else next(iter(chat_models()))
-    name = "Virgo-1.0-Bayon" if "bayon" in model else "Virgo-1.0-Angkor"
+    # The live voice has its own name: Virgo-Bakong-{VIRGO_LIVE_VERSION} (2.0), answering with Angkor or Bayon.
+    chat_name = "Virgo-1.0-Bayon" if "bayon" in model else "Virgo-1.0-Angkor"
+    name = f"Virgo-Bakong-{os.environ.get('VIRGO_LIVE_VERSION', '2.0').strip()}, KSN's real-time voice, answering with {chat_name}"
     await handle(Adapter(), load_chat(model), load("speech"), _models["vad"], name)
