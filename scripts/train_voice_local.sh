@@ -10,7 +10,7 @@
 # Run it when nothing else is training: it needs most of a 24 GB GPU. About 1-2 hours.
 set -euo pipefail
 CODE="$(cd "$(dirname "$0")/.." && pwd)"
-source "$CODE/env.sh"
+source "$CODE/scripts/env_auto.sh"   # your server (env.sh), Colab or Kaggle
 ROOT="$VIRGO_HOME"
 ITERS="${VIRGO_VOICE_STEPS:-1500}"
 cd "$CODE"
