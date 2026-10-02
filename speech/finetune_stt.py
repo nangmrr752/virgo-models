@@ -39,22 +39,41 @@ def fleurs(work):
 
     folder = os.path.join(work, "fleurs")
     index = os.path.join(folder, "metadata.csv")
+    if os.path.exists(index) and sum(1 for _ in open(index, encoding="utf-8")) <= 1:
+        os.remove(index)  # left empty by a run that stopped
     if not os.path.exists(index):
         try:
-            from datasets import load_dataset
+            from datasets import Audio, load_dataset
 
-            rows = load_dataset("google/fleurs", "km_kh", split="train", trust_remote_code=True)
+            try:
+                rows = load_dataset("google/fleurs", "km_kh", split="train")
+            except Exception:
+                rows = load_dataset("google/fleurs", "km_kh", split="train", trust_remote_code=True)
+            # The audio is read here with soundfile, not by `datasets` (newer versions need torchcodec).
+            rows = rows.cast_column("audio", Audio(decode=False))
         except Exception as err:
             print("FLEURS skipped (can't load it with this datasets version):", type(err).__name__)
             return []
+        import io
+
         os.makedirs(folder, exist_ok=True)
-        with open(index, "w", encoding="utf-8", newline="") as f:
+        kept = 0
+        with open(index + ".part", "w", encoding="utf-8", newline="") as f:
             out = csv.writer(f)
             out.writerow(["file_name", "sentence"])
             for i, row in enumerate(rows):
+                audio = row["audio"]
+                try:
+                    source = io.BytesIO(audio["bytes"]) if audio.get("bytes") else audio["path"]
+                    wave, rate = sf.read(source, dtype="float32")
+                except Exception:
+                    continue
                 name = f"{i:05d}.wav"
-                sf.write(os.path.join(folder, name), row["audio"]["array"], row["audio"]["sampling_rate"])
+                sf.write(os.path.join(folder, name), wave, rate)
                 out.writerow([name, row["transcription"]])
+                kept += 1
+        os.replace(index + ".part", index)
+        print(f"✅ FLEURS Khmer: {kept} clips")
     return read_extra(folder)
 
 
