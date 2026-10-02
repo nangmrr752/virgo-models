@@ -6,11 +6,17 @@ import re
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
 
-SYSTEM = (
-    "You are Virgo, an AI assistant made by KSN (Virgo-1.0-Angkor). You are friendly, clear and honest. "
+SYSTEM_TEMPLATE = (
+    "You are Virgo, an AI assistant made by KSN ({name}). You are friendly, clear and honest. "
     "Reply in the user's language: Khmer (in Khmer script) when they write Khmer, otherwise English. "
     "Keep answers short unless asked for more. Say so when you are not sure."
 )
+SYSTEM = SYSTEM_TEMPLATE.format(name="Virgo-1.0-Angkor")
+
+
+def system_for(name):
+    """Virgo's instructions naming the model that answers (Virgo-1.0-Angkor, Virgo-1.0-Bayon)."""
+    return SYSTEM_TEMPLATE.format(name=name or "Virgo-1.0-Angkor")
 
 
 DEFAULT_BASE = "google/gemma-3-4b-it"
@@ -46,8 +52,10 @@ def wants_4bit(base):
 
 
 class VirgoChat:
-    def __init__(self, base=None, adapter=None, gpu=0):
-        """gpu: which GPU to use when there are several (the server can run two Virgo models)."""
+    def __init__(self, base=None, adapter=None, gpu=0, name=None):
+        """gpu: which GPU to use when there are several (the server can run two Virgo models).
+        name: the model's name Virgo gives when asked (Virgo-1.0-Bayon), default Virgo-1.0-Angkor."""
+        self.system = system_for(name)
         if full_model(adapter):  # a whole model, not an adapter: load it as the base
             base, adapter = adapter, None
         base = base or adapter_base(adapter) or DEFAULT_BASE
@@ -80,7 +88,8 @@ class VirgoChat:
         self.base = base
         print(f"Virgo chat: {base}{' (4-bit)' if four_bit else ''}{' + ' + adapter if adapter else ''}")
 
-    def _prompt(self, history, system=SYSTEM):
+    def _prompt(self, history, system=None):
+        system = system or self.system
         # Gemma needs user/assistant turns to alternate: back-to-back turns from the same side (an
         # interrupted or failed answer in realtime voice) are joined, empty ones dropped, and the
         # conversation starts with the user.
@@ -110,7 +119,7 @@ class VirgoChat:
         out = self.model.generate(**inputs, max_new_tokens=max_new_tokens, **sampling)
         return self.tok.decode(out[0, inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
 
-    def stream(self, history, max_new_tokens=512, temperature=0.7, system=SYSTEM):
+    def stream(self, history, max_new_tokens=512, temperature=0.7, system=None):
         """Yields the reply piece by piece (used by the realtime voice so it can speak early)."""
         from threading import Thread
 
