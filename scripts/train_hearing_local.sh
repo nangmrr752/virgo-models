@@ -5,6 +5,8 @@
 #   bash scripts/train_local.sh hearing                         # all of Whisper, 6000 steps (~2-4 h on a 4090)
 #   bash scripts/train_local.sh hearing --extra <folder>        # plus your own recordings (.wav + metadata.csv)
 #   VIRGO_HEARING_STEPS=3000 bash scripts/train_local.sh hearing
+#   VIRGO_HEARING_BASE=metythorn/whisper-large-v3-turbo bash scripts/train_local.sh hearing
+#                                                               # start from another Whisper (e.g. a Khmer fine-tune)
 #
 # Starts from your current Angkor-1.0-STT when there is one (else Whisper large-v3-turbo),
 # prints the Khmer character error rate (CER) before and after. Stop the Virgo server first: both
@@ -16,7 +18,8 @@ ROOT="$VIRGO_HOME"
 cd "$CODE"
 ME=$(python -c "from huggingface_hub import HfApi; print(HfApi().whoami()['name'])")
 REPO=$(python scripts/names.py resolve Angkor-1.0-STT 2>/dev/null || echo "$ME/Virgo-1.0-Angkor-Hearing")  # old name until renamed
-BASE=$(python -c "from huggingface_hub import HfApi; print('$REPO' if HfApi().file_exists('$REPO', 'config.json') else 'openai/whisper-large-v3-turbo')" 2>/dev/null || echo openai/whisper-large-v3-turbo)
+BASE=${VIRGO_HEARING_BASE:-}
+[ -n "$BASE" ] || BASE=$(python -c "from huggingface_hub import HfApi; print('$REPO' if HfApi().file_exists('$REPO', 'config.json') else 'openai/whisper-large-v3-turbo')" 2>/dev/null || echo openai/whisper-large-v3-turbo)
 LOG="$ROOT/logs/Angkor-1.0-STT-$(date +%Y%m%d-%H%M).log"
 mkdir -p "$ROOT/logs"
 {
