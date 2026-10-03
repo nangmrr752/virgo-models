@@ -19,6 +19,7 @@ import io
 import json
 import os
 import re
+import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -164,11 +165,24 @@ def split_long(sentence):
     return parts + [rest]
 
 
+def calendar_facts():
+    """Today's date, the Khmer lunar date, upcoming holidays and Khmer New Year, so the model never guesses
+    a date. Computed by the Khmer lunar engine (realtime/khmer_calendar, needs Node); just the date without it."""
+    today = datetime.now(timezone(timedelta(hours=7)))
+    plain = f"Today is {today:%A, %d %B %Y} (Cambodia time); use this for any date question."
+    try:
+        facts = subprocess.run(["node", os.path.join(os.path.dirname(__file__), "khmer_calendar", "facts.mjs")],
+                               capture_output=True, text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        facts = ""
+    if not facts:
+        return plain
+    return ("Khmer calendar facts (computed exactly; use them for any date, lunar day or holiday, and say Khmer "
+            f"dates in this form):\n{facts}")
+
 async def handle(ws, chat, speech, vad, name="Angkor-1.0"):
     conv = Conversation(chat, speech, vad)
-    # Today's date in Cambodia (UTC+7), so the model doesn't fall back on the year it was trained in.
-    today = datetime.now(timezone(timedelta(hours=7)))
-    system = VOICE_SYSTEM.format(name=name) + f" Today is {today:%A, %d %B %Y} (Cambodia time); use this for any date question."
+    system = VOICE_SYSTEM.format(name=name) + " " + calendar_facts()
     talking, silent_for, utterance = False, 0.0, []
 
     async def send(kind, **data):
