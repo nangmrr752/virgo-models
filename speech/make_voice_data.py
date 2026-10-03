@@ -65,10 +65,23 @@ class Checker:
 
     def __init__(self, model):
         import torch
-        from transformers import pipeline
+        from transformers import WhisperForConditionalGeneration, WhisperProcessor
 
         print("Checking clips with", model, flush=True)
-        self.asr = pipeline("automatic-speech-recognition", model=model, torch_dtype=torch.float16, device=0 if torch.cuda.is_available() else -1)
+        # Whisper used directly (not the transformers pipeline): newer pipelines need torchcodec + FFmpeg
+        # libraries to read audio, which the voice environment doesn't have.
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.dtype = torch.float16 if self.device == "cuda" else torch.float32
+        self.processor = WhisperProcessor.from_pretrained(model)
+        self.model = WhisperForConditionalGeneration.from_pretrained(model, torch_dtype=self.dtype).to(self.device).eval()
+
+    def heard(self, wave):
+        import torch
+
+        features = self.processor.feature_extractor(wave, sampling_rate=16000, return_tensors="pt").input_features
+        with torch.inference_mode():
+            ids = self.model.generate(features.to(self.device, self.dtype), language="khmer", task="transcribe")
+        return self.processor.batch_decode(ids, skip_special_tokens=True)[0]
 
     @staticmethod
     def _norm(text):
@@ -79,7 +92,7 @@ class Checker:
 
         if rate != 16000:
             wave = np.interp(np.arange(0, len(wave), rate / 16000), np.arange(len(wave)), wave).astype(np.float32)
-        heard = self.asr({"raw": wave, "sampling_rate": 16000}, generate_kwargs={"language": "khmer", "task": "transcribe"})["text"]
+        heard = self.heard(np.asarray(wave, np.float32))
         a, b = self._norm(text), self._norm(heard)
         if not a:
             return 1.0
