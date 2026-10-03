@@ -253,6 +253,20 @@ def score(model, processor, rows, limit=100):
 
 
 @torch.inference_mode()
+@torch.inference_mode()
+def detect_language(model, tokenizer, features):
+    """Whisper's language guess for one clip: the most likely language token right after the start token
+    (generate()'s output may leave the language tag out, depending on the transformers version)."""
+    lang_to_id = getattr(model.generation_config, "lang_to_id", None) or {}
+    if not lang_to_id:
+        return None
+    start = torch.tensor([[model.generation_config.decoder_start_token_id]], device=model.device)
+    logits = model(input_features=features, decoder_input_ids=start).logits[0, -1]
+    codes, ids = zip(*lang_to_id.items())
+    return codes[int(torch.argmax(logits[list(ids)]))].strip("<|>")
+
+
+@torch.inference_mode()
 def score_detect(model, processor, rows, limit=60):
     """With the language left to the model (as in live voice): (average CER, share of clips whose language
     it got right) on up to `limit` held-out clips of (path, text, language)."""
@@ -265,10 +279,9 @@ def score_detect(model, processor, rows, limit=60):
     for path, text, lang in rows:
         audio, _ = librosa.load(path, sr=RATE, mono=True)
         feats = processor.feature_extractor(audio[: 30 * RATE], sampling_rate=RATE, return_tensors="pt").input_features.to(model.device, dtype)
-        ids = model.generate(feats, task="transcribe", max_new_tokens=200)
-        tokens = processor.tokenizer.convert_ids_to_tokens(ids[0].tolist())
-        code = {"khmer": "km"}.get(lang, lang)
-        right += f"<|{code}|>" in tokens
+        guess = detect_language(model, processor.tokenizer, feats)
+        right += guess == {"khmer": "km"}.get(lang, lang)
+        ids = model.generate(feats, task="transcribe", max_new_tokens=200, **({"language": guess} if guess else {}))
         errors.append(cer(text.lower(), processor.tokenizer.decode(ids[0], skip_special_tokens=True).lower()))
     return (float(np.mean(errors)) if errors else float("nan")), (right / len(rows) if rows else float("nan"))
 
@@ -289,6 +302,7 @@ def main():
     p.add_argument("--lr", type=float, default=1e-4, help="LoRA learning rate (use ~1e-5 with --full)")
     p.add_argument("--full", action="store_true", help="train every weight instead of LoRA (needs more GPU memory)")
     p.add_argument("--push", help="Hugging Face repo to save to, e.g. you/Virgo-1.0-Angkor-Hearing")
+    p.add_argument("--score-only", metavar="FOLDER", help="don't train: score (and upload, if it passes) a model already trained into FOLDER")
     p.add_argument("--multilingual", action="store_true", help="one model for every language: also train on other languages (--keep)")
     p.add_argument("--keep", default="en:2500,zh:300,th:300,vi:300,fr:200,ja:200,ko:200",
                    help="with --multilingual: languages (and clips) to keep, from Google FLEURS")
@@ -366,15 +380,22 @@ def main():
         except Exception as err:
             print("Couldn't score the current hearing:", err)
 
-    if not args.full:
+    if args.score_only:  # a model trained earlier (e.g. stopped by a scoring bug): score it as "after"
+        del model
+        model = WhisperForConditionalGeneration.from_pretrained(args.score_only, dtype=torch.float32)
+        model.generation_config.forced_decoder_ids = None
+        model = model.to("cuda") if gpu else model
+        args.full = True  # nothing to merge
+    elif not args.full:
         from peft import LoraConfig, get_peft_model
 
         model.enable_input_require_grads()
         model = get_peft_model(model, LoraConfig(r=32, lora_alpha=64, lora_dropout=0.05,
                                                  target_modules=["q_proj", "k_proj", "v_proj", "out_proj", "fc1", "fc2"]))
         model.print_trainable_parameters()
-    model.train()
-    Seq2SeqTrainer(
+    if not args.score_only:
+        model.train()
+    trainer = None if args.score_only else Seq2SeqTrainer(
         model=model,
         args=Seq2SeqTrainingArguments(
             output_dir=os.path.join(args.work, "run"), per_device_train_batch_size=args.batch,
@@ -386,7 +407,9 @@ def main():
         ),
         train_dataset=Clips(train),
         data_collator=Collator(processor),
-    ).train()
+    )
+    if trainer:
+        trainer.train()
 
     if not args.full:
         model = model.merge_and_unload()
