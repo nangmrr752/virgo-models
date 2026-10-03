@@ -158,7 +158,7 @@ def split_long(sentence):
     return parts + [rest]
 
 
-async def handle(ws, chat, speech, vad, name="Virgo-1.0-Angkor"):
+async def handle(ws, chat, speech, vad, name="Virgo-Angkor-1.0"):
     conv = Conversation(chat, speech, vad)
     system = VOICE_SYSTEM.format(name=name)
     talking, silent_for, utterance = False, 0.0, []

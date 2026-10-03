@@ -12,12 +12,12 @@ SYSTEM_TEMPLATE = (
     "and the same for any other language (Thai, Chinese, French...). "
     "Keep answers short unless asked for more. Say so when you are not sure."
 )
-SYSTEM = SYSTEM_TEMPLATE.format(name="Virgo-1.0-Angkor")
+SYSTEM = SYSTEM_TEMPLATE.format(name="Virgo-Angkor-1.0")
 
 
 def system_for(name):
-    """Virgo's instructions naming the model that answers (Virgo-1.0-Angkor, Virgo-1.0-Bayon)."""
-    return SYSTEM_TEMPLATE.format(name=name or "Virgo-1.0-Angkor")
+    """Virgo's instructions naming the model that answers (Virgo-Angkor-1.0, Virgo-Bayon-1.0)."""
+    return SYSTEM_TEMPLATE.format(name=name or "Virgo-Angkor-1.0")
 
 
 DEFAULT_BASE = "google/gemma-3-4b-it"
@@ -41,7 +41,7 @@ def full_model(folder):
 
 
 def wants_4bit(base):
-    """12B and bigger load in 4 bits on a GPU, so Virgo-1.0-Angkor 12B fits a free 16 GB T4."""
+    """12B and bigger load in 4 bits on a GPU, so Virgo-Angkor-1.0-12B fits a free 16 GB T4."""
     flag = os.environ.get("VIRGO_4BIT")
     if flag is not None:
         return flag == "1"
@@ -55,7 +55,7 @@ def wants_4bit(base):
 class VirgoChat:
     def __init__(self, base=None, adapter=None, gpu=0, name=None):
         """gpu: which GPU to use when there are several (the server can run two Virgo models).
-        name: the model's name Virgo gives when asked (Virgo-1.0-Bayon), default Virgo-1.0-Angkor."""
+        name: the model's name Virgo gives when asked (Virgo-Bayon-1.0), default Virgo-Angkor-1.0."""
         self.system = system_for(name)
         if full_model(adapter):  # a whole model, not an adapter: load it as the base
             base, adapter = adapter, None

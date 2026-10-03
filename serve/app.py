@@ -32,7 +32,7 @@ from pydantic import BaseModel
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 sys.path += [os.path.join(ROOT, d) for d in ("chat", "speech", "image", "video", "realtime")]
 
-app = FastAPI(title="Virgo-1.0-Angkor", version="1.0.0")
+app = FastAPI(title="Virgo", version="1.0.0")
 _models = {}
 _locks = {}
 
@@ -68,7 +68,7 @@ def load_chat(model=None):
         index = list(models).index(model)
         gpu = 0 if gpus <= 1 or index == 0 else gpus - 1 - (index - 1) % (gpus - 1)
         folder = models[model]
-        name = "Virgo-1.0-Bayon" if "bayon" in model else "Virgo-1.0-Angkor"
+        name = "Virgo-Bayon-1.0" if "bayon" in model else "Virgo-Angkor-1.0"
         _models[key] = VirgoChat(adapter=folder if os.path.isdir(folder) else None, gpu=gpu, name=name)
         print(f"Chat model {model} ready on GPU {gpu}")
     return _models[key]
@@ -88,7 +88,7 @@ def preload():
             for model in list(chat_models())[1:]:
                 load_chat(model)
         if name == "speech":
-            # Start Virgo-1.0-Angkor-Voice now: the log says right away whether it works, and the
+            # Start Virgo's own voice (VoxCPM2) now: the log says right away whether it works, and the
             # first answer isn't slow.
             try:  # both ears now (every-language Whisper + Virgo's Khmer hearing), not on the first question
                 _models["speech"]._pipeline()
@@ -96,7 +96,8 @@ def preload():
             except Exception as err:
                 print("Hearing didn't preload:", err)
             voice = _models["speech"]._vox_voice()
-            print("🗣️ Voice:", "Virgo-1.0-Angkor-Voice (VoxCPM2)" if voice else "fallback voices (MMS / Kokoro): Virgo-1.0-Angkor-Voice isn't set up or didn't start")
+            name = (os.environ.get("VIRGO_VOX_REPO") or "Virgo's voice").split("/")[-1]
+            print("🗣️ Voice:", f"{name} (VoxCPM2)" if voice else f"fallback voices (Microsoft / Kokoro): {name} isn't set up or didn't start")
 
 
 def load(name):
@@ -269,6 +270,6 @@ async def realtime(ws: WebSocket):
     model = ws.query_params.get("model")
     model = model if model in chat_models() else next(iter(chat_models()))
     # The live voice has its own name: Virgo-Bakong-{VIRGO_LIVE_VERSION} (2.0), answering with Angkor or Bayon.
-    chat_name = "Virgo-1.0-Bayon" if "bayon" in model else "Virgo-1.0-Angkor"
+    chat_name = "Virgo-Bayon-1.0" if "bayon" in model else "Virgo-Angkor-1.0"
     name = f"Virgo-Bakong-{os.environ.get('VIRGO_LIVE_VERSION', '2.0').strip()}, KSN's real-time voice, answering with {chat_name}"
     await handle(Adapter(), load_chat(model), load("speech"), _models["vad"], name)
