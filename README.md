@@ -113,6 +113,10 @@ python scripts/check_data.py
 python chat/train.py                 # Gemma 3 4B in 4 bits; --base google/gemma-3-1b-it for a CPU
 python chat/evaluate.py              # scores Virgo on chat/eval/questions.jsonl
 
+# Smarter on your own GPU server (stop the Virgo server first): checked examples from Bayon-1.0-27B,
+# then Angkor 12B, DPO, Bayon 27B, DPO and hearing, each uploaded only when it's better
+bash scripts/train_local.sh all
+
 # 3. Try each ability
 python chat/chat.py
 python speech/virgo_speech.py tts "សួស្តី ខ្ញុំឈ្មោះ Virgo" hello.wav

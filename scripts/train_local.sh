@@ -7,6 +7,9 @@
 #   bash scripts/train_local.sh hearing       # Virgo's hearing (Whisper, Khmer), see train_hearing_local.sh
 #   bash scripts/train_local.sh voice         # Virgo's live voice (VoxCPM2), see train_voice_local.sh
 #   bash scripts/train_local.sh angkor 12b    # Angkor-1.0-12B (also: angkor 4b → Angkor-1.0-4B)
+#   bash scripts/train_local.sh distill [N]   # Bayon-1.0-27B answers N checked problems (default 12000), see distill_smart.py
+#   bash scripts/train_local.sh dpo angkor 12b  # DPO on the pairs distill made; uploads only if the hard test improves
+#   bash scripts/train_local.sh all           # everything in order: distill → Angkor 12B → DPO → Bayon 27B → DPO → hearing
 # Names: scripts/names.py — {Name}-{Version}-{Size} in Virgo's Hugging Face organization (VIRGO_HF_ORG);
 # uploads keep going to an old repo until you move it with: python scripts/names.py rename --yes
 #
@@ -20,6 +23,9 @@ ROOT="$VIRGO_HOME"
 [ "${1:-}" = voice ] && { shift; exec bash "$CODE/scripts/train_voice_local.sh" "$@"; }  # Virgo's live voice
 [ "${1:-}" = score ] && { shift; exec bash "$CODE/scripts/score_server.sh" "$@"; }  # score the running server
 [ "${1:-}" = hearing ] && { shift; exec bash "$CODE/scripts/train_hearing_local.sh" "$@"; }  # Virgo's hearing (Whisper)
+[ "${1:-}" = distill ] && { shift; exec bash "$CODE/scripts/smart_local.sh" distill "$@"; }  # checked examples + DPO pairs
+[ "${1:-}" = dpo ] && { shift; exec bash "$CODE/scripts/smart_local.sh" dpo "$@"; }
+[ "${1:-}" = all ] && { shift; exec bash "$CODE/scripts/smart_local.sh" all "$@"; }
 WHICH="${1:-bayon}"; DEFAULT_SIZE=12b; [ "$WHICH" = bayon ] && DEFAULT_SIZE=27b
 # Smaller GPUs (Colab/Kaggle T4, 16 GB): 27B doesn't fit, so Bayon defaults to 12B there.
 [ "$DEFAULT_SIZE" = 27b ] && [ "${GPU_GB:-0}" -lt 22 ] && DEFAULT_SIZE=12b
@@ -46,17 +52,30 @@ git pull -q
   DATA_REPO=$(python scripts/names.py resolve Data-1.0 2>/dev/null || echo "$ME/Virgo-1.0-Angkor-Data")
   python -c "from huggingface_hub import hf_hub_download as d; d('$DATA_REPO', 'distilled_gemma27b.jsonl', repo_type='dataset', local_dir='chat/data')" >/dev/null 2>&1 \
     && echo "➕ Using the Gemma 27B examples" || echo "No Gemma 27B examples yet"
+  # Checked examples from scripts/distill_smart.py (bash scripts/train_local.sh distill), when made.
+  python -c "from huggingface_hub import hf_hub_download as d; d('$DATA_REPO', 'distilled_smart.jsonl', repo_type='dataset', local_dir='chat/data')" >/dev/null 2>&1 \
+    && echo "➕ Using $(wc -l < chat/data/distilled_smart.jsonl) checked examples (distill_smart)" || echo "No checked examples yet (bash scripts/train_local.sh distill)"
   DATA="chat/data/*.jsonl"
   # The model's own copy of the data, where Virgo calls itself by this model's standard name
   # (Bayon-1.0 / Angkor-1.0).
   SELF="${WHICH^}-1.0"
   rm -rf "chat/data_$WHICH" && mkdir -p "chat/data_$WHICH"
-  for f in chat/data/*.jsonl; do sed "s/Virgo-1\.0-Angkor/$SELF/g; s/Virgo-1\.0-Bayon/$SELF/g" "$f" > "chat/data_$WHICH/$(basename "$f")"; done
+  for f in chat/data/*.jsonl; do sed "s/Virgo-1\.0-Angkor/$SELF/g; s/Virgo-1\.0-Bayon/$SELF/g; s/(model: Angkor-1\.0)/(model: $SELF)/g" "$f" > "chat/data_$WHICH/$(basename "$f")"; done
   DATA="chat/data_$WHICH/*.jsonl"
   python scripts/check_data.py "$DATA"
   python -u chat/train.py --base "$BASE" --data "$DATA" --out "$OUT" --epochs 3 $EXTRA "$@"
   echo "== Score =="
   python chat/evaluate.py --adapter "$OUT" || echo "(scoring failed; the model is still saved)"
+  # The hard test decides: the best score so far for this model is kept in <data>/logs/<model>-hard-best.json
+  # (DPO updates it too), and a model that scores lower isn't uploaded.
+  BEST="$ROOT/logs/$NAME-hard-best.json"; NEW="$ROOT/logs/$NAME-hard-$(date +%Y%m%d-%H%M).json"
+  COMPARE=(); [ -f "$BEST" ] && COMPARE=(--compare "$BEST")
+  python chat/evaluate.py --questions chat/eval/hard.jsonl --adapter "$OUT" --report "$NEW" "${COMPARE[@]}" | tail -20 \
+    || echo "(hard test failed to run)"
+  if [ -f "$BEST" ] && [ -f "$NEW" ] && ! python -c "import json,sys; sys.exit(0 if json.load(open('$NEW'))['overall'] >= json.load(open('$BEST'))['overall'] else 1)"; then
+    echo "⚠️ $NAME scored lower on the hard test than the best one so far: not uploaded (kept in $OUT)"
+    exit 0
+  fi
   echo "== Upload =="
   REPO=$(python scripts/names.py resolve "$NAME" 2>/dev/null || echo "$ME/$NAME")  # an old name until renamed
   python - "$REPO" "$OUT" <<'PY'
@@ -66,5 +85,6 @@ repo, folder = sys.argv[1], sys.argv[2]
 HfApi().create_repo(repo, private=True, exist_ok=True)
 HfApi().upload_folder(folder_path=folder, repo_id=repo, commit_message=repo.split("/")[1], ignore_patterns=["checkpoint-*"])
 PY
+  [ -f "$NEW" ] && cp "$NEW" "$BEST"
   echo "✅ $NAME saved: https://huggingface.co/$REPO"
 } 2>&1 | tee "$LOG"

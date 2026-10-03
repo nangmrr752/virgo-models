@@ -13,3 +13,7 @@ __pycache__/
 !docs/*.png
 env.sh
 .env
+# Made on your machine and kept in your Hugging Face dataset (Data-1.0), not in git
+chat/data/distilled_*.jsonl
+chat/dpo/
+chat/data_*/

@@ -7,3 +7,4 @@ datasets>=3.0
 bitsandbytes>=0.44
 sentencepiece
 huggingface_hub
+trl>=0.12                # DPO (chat/train_dpo.py)
