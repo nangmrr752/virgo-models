@@ -20,6 +20,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import soundfile as sf
@@ -165,7 +166,9 @@ def split_long(sentence):
 
 async def handle(ws, chat, speech, vad, name="Angkor-1.0"):
     conv = Conversation(chat, speech, vad)
-    system = VOICE_SYSTEM.format(name=name)
+    # Today's date in Cambodia (UTC+7), so the model doesn't fall back on the year it was trained in.
+    today = datetime.now(timezone(timedelta(hours=7)))
+    system = VOICE_SYSTEM.format(name=name) + f" Today is {today:%A, %d %B %Y} (Cambodia time); use this for any date question."
     talking, silent_for, utterance = False, 0.0, []
 
     async def send(kind, **data):
