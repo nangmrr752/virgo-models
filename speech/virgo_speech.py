@@ -172,14 +172,24 @@ class VirgoSpeech:
                 # An unsure "Khmer": check it against Whisper's second guess the same way (English said
                 # quickly or with a Khmer accent is often half-taken for Khmer).
                 language, sure = WHISPER_NAMES.get(self._runner_up, self._runner_up), 1 - sure
-            if language and language not in KHMER_NAMES and sure < 0.97 and not self.general_model:
+            raw = next((c for c, n in WHISPER_NAMES.items() if n == language), language)
+            lookalike = raw in LOOKALIKES  # Vietnamese, Lao, Thai...: what Khmer is mistaken for
+            trust = float(os.environ.get("VIRGO_STT_TRUST", "0.5"))
+            if language and language not in KHMER_NAMES and not lookalike and sure >= trust:
+                # English (or another language that doesn't sound like Khmer) and Whisper is fairly sure:
+                # believe it. Virgo's Khmer ear can't be asked: it writes any sound in Khmer letters,
+                # confidently ("can you speak English" → កេនយុស្ពីងគ្លីស៍).
+                pass
+            elif language and language not in KHMER_NAMES and sure < 0.97 and not self.general_model:
                 language = self._pick_language(judge.model, judge.tokenizer, feats)  # one model: Khmer by default
             elif language and language not in KHMER_NAMES and sure < 0.97:
                 # Not sure it isn't Khmer: write it down both ways and keep the version the models are
                 # more confident about (a small lean to Khmer, and to the language just spoken).
                 other = self._decode(judge, feats, language)
                 khmer = self._decode(self._pipeline(), features_for(self._pipeline()), "khmer")
-                lean = 0.15 + (0.1 if self._last_language in KHMER_NAMES else -0.1 if self._last_language == language else 0)
+                # Against a lookalike (Vietnamese, Lao...) Khmer is usually right: a lean to Khmer. Against
+                # English, none: the Khmer ear is confident even when it's wrong.
+                lean = (0.15 if lookalike else 0.0) + (0.05 if self._last_language in KHMER_NAMES else -0.05 if self._last_language == language else 0)
                 if not KHMER.search(khmer[0]):
                     lean -= 1  # the Khmer ear heard no Khmer at all
                 print(f"Heard: close call {language} {sure:.2f} → Khmer ear {khmer[1]:.2f}+{lean:.2f} vs "
