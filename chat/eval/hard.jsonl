@@ -1,0 +1,106 @@
+{"q": "A phone costs $320. It is 15% off, then 10% tax is added to the sale price. What is the final price in dollars?", "lang": "en", "skill": "math", "number": 299.2, "last": true}
+{"q": "Dara reads 12 pages a day. Her book has 300 pages and she has read 84. How many more days does she need?", "lang": "en", "skill": "math", "number": 18, "last": true}
+{"q": "What is 17 × 23?", "lang": "en", "skill": "math", "number": 391, "last": true}
+{"q": "What is 12 × 12 − 11 × 11?", "lang": "en", "skill": "math", "number": 23, "last": true}
+{"q": "A tuk-tuk charges 4,000 riel to start plus 1,500 riel per km. How much is a 6 km ride, in riel?", "lang": "en", "skill": "math", "number": 13000, "last": true}
+{"q": "If 5 workers build a wall in 12 days, how many days do 6 workers take at the same rate?", "lang": "en", "skill": "math", "number": 10, "last": true}
+{"q": "The sum of three consecutive whole numbers is 72. What is the largest?", "lang": "en", "skill": "math", "number": 25, "last": true}
+{"q": "How many seconds are in one day?", "lang": "en", "skill": "math", "number": 86400, "last": true}
+{"q": "A square has a perimeter of 36 cm. What is its area in square cm?", "lang": "en", "skill": "math", "number": 81, "last": true}
+{"q": "I put $1,000 in the bank at 10% interest a year, compounded yearly. How many dollars do I have after 2 years?", "lang": "en", "skill": "math", "number": 1210, "last": true}
+{"q": "A recipe needs 250 g of flour for 4 people. How many grams for 10 people?", "lang": "en", "skill": "math", "number": 625, "last": true}
+{"q": "A clock shows 3:00. What is the angle in degrees between the hour and minute hands?", "lang": "en", "skill": "math", "number": 90, "last": true}
+{"q": "ទូរស័ព្ទមួយថ្លៃ ៣២០ ដុល្លារ។ គេបញ្ចុះតម្លៃ ១៥% រួចបូកពន្ធ ១០% លើតម្លៃក្រោយបញ្ចុះ។ តើតម្លៃចុងក្រោយប៉ុន្មានដុល្លារ?", "lang": "km", "skill": "math", "number": 299.2, "last": true}
+{"q": "ដារ៉ាអានសៀវភៅ ១២ ទំព័រក្នុងមួយថ្ងៃ។ សៀវភៅមាន ៣០០ ទំព័រ ហើយនាងបានអានរួច ៨៤ ទំព័រ។ តើនាងត្រូវការប៉ុន្មានថ្ងៃទៀត?", "lang": "km", "skill": "math", "number": 18, "last": true}
+{"q": "១៧ គុណ ២៣ ស្មើប៉ុន្មាន?", "lang": "km", "skill": "math", "number": 391, "last": true}
+{"q": "៣ ស្វ័យគុណ ៤ ស្មើប៉ុន្មាន?", "lang": "km", "skill": "math", "number": 81, "last": true}
+{"q": "២ ស្វ័យគុណ ៨ ស្មើប៉ុន្មាន?", "lang": "km", "skill": "math", "number": 256, "last": true}
+{"q": "១០ ស្វ័យគុណ ៣ ស្មើប៉ុន្មាន?", "lang": "km", "skill": "math", "number": 1000, "last": true}
+{"q": "ឫសការ៉េនៃ ១៤៤ បូកនឹង ៥ ការ៉េ ស្មើប៉ុន្មាន?", "lang": "km", "skill": "math", "number": 37, "last": true}
+{"q": "តុកតុកគិតថ្លៃចាប់ផ្តើម ៤០០០ រៀល បូក ១៥០០ រៀលក្នុងមួយគីឡូម៉ែត្រ។ ជិះ ៦ គីឡូម៉ែត្រ ត្រូវបង់ប៉ុន្មានរៀល?", "lang": "km", "skill": "math", "number": 13000, "last": true}
+{"q": "កម្មករ ៥ នាក់សង់ជញ្ជាំងរួចក្នុង ១២ ថ្ងៃ។ បើកម្មករ ៦ នាក់ធ្វើក្នុងល្បឿនដូចគ្នា តើត្រូវការប៉ុន្មានថ្ងៃ?", "lang": "km", "skill": "math", "number": 10, "last": true}
+{"q": "ផលបូកនៃចំនួនគត់បីបន្តបន្ទាប់គ្នា គឺ ៧២។ តើចំនួនធំជាងគេគឺប៉ុន្មាន?", "lang": "km", "skill": "math", "number": 25, "last": true}
+{"q": "មួយថ្ងៃមានប៉ុន្មានវិនាទី?", "lang": "km", "skill": "math", "number": 86400, "last": true}
+{"q": "ការេមួយមានបរិមាត្រ ៣៦ សង់ទីម៉ែត្រ។ តើក្រឡាផ្ទៃរបស់វាប៉ុន្មានសង់ទីម៉ែត្រការ៉េ?", "lang": "km", "skill": "math", "number": 81, "last": true}
+{"q": "ខ្ញុំដាក់ប្រាក់ ១០០០ ដុល្លារ ការប្រាក់ ១០% ក្នុងមួយឆ្នាំ (ការប្រាក់បូកចូលដើមរៀងរាល់ឆ្នាំ)។ ក្រោយ ២ ឆ្នាំ ខ្ញុំមានប៉ុន្មានដុល្លារ?", "lang": "km", "skill": "math", "number": 1210, "last": true}
+{"q": "ម្ហូបមួយត្រូវការម្សៅ ២៥០ ក្រាម សម្រាប់មនុស្ស ៤ នាក់។ សម្រាប់ ១០ នាក់ ត្រូវការប៉ុន្មានក្រាម?", "lang": "km", "skill": "math", "number": 625, "last": true}
+{"q": "A farmer has 17 sheep. All but 9 die. How many sheep are still alive?", "lang": "en", "skill": "reasoning", "number": 9, "last": true}
+{"q": "កសិករមានចៀម ១៧ ក្បាល។ ចៀមងាប់អស់ លើកលែងតែ ៩ ក្បាល។ តើនៅរស់ប៉ុន្មានក្បាល?", "lang": "km", "skill": "reasoning", "number": 9, "last": true}
+{"q": "Is 51 a prime number? Start your answer with yes or no, then explain.", "lang": "en", "skill": "reasoning", "starts": ["no"], "any": ["17"]}
+{"q": "លេខ ៥១ ជាចំនួនបឋមឬទេ? ចាប់ផ្តើមចម្លើយដោយ «បាទ/ចាស» ឬ «ទេ» រួចពន្យល់។", "lang": "km", "skill": "reasoning", "starts": ["ទេ"], "any": ["១៧", "17"]}
+{"q": "Is 97 a prime number? Start your answer with yes or no.", "lang": "en", "skill": "reasoning", "starts": ["yes"]}
+{"q": "Is 91 a prime number? Start your answer with yes or no, then explain.", "lang": "en", "skill": "reasoning", "starts": ["no"], "any": ["13"]}
+{"q": "If 5 machines make 5 toys in 5 minutes, how many minutes do 100 machines take to make 100 toys?", "lang": "en", "skill": "reasoning", "number": 5}
+{"q": "បើម៉ាស៊ីន ៥ គ្រឿង ផលិតប្រដាប់ក្មេងលេង ៥ ដុំ ក្នុងរយៈពេល ៥ នាទី តើម៉ាស៊ីន ១០០ គ្រឿង ត្រូវការប៉ុន្មាននាទី ដើម្បីផលិត ១០០ ដុំ?", "lang": "km", "skill": "reasoning", "number": 5, "not": ["១០០ នាទី", "100 នាទី"]}
+{"q": "A water lily doubles in size every day. It covers the whole pond on day 30. On which day did it cover half the pond?", "lang": "en", "skill": "reasoning", "number": 29, "last": true}
+{"q": "ផ្កាឈូកមួយរីកធំទ្វេដងរៀងរាល់ថ្ងៃ។ នៅថ្ងៃទី ៣០ វាគ្របពេញស្រះ។ តើវាគ្របពាក់កណ្តាលស្រះនៅថ្ងៃទីប៉ុន្មាន?", "lang": "km", "skill": "reasoning", "number": 29, "last": true}
+{"q": "Sok's mother has three children: Ka, Kha and who?", "lang": "en", "skill": "reasoning", "any": ["Sok"]}
+{"q": "ម្តាយរបស់សុខមានកូនបីនាក់៖ កា ខា និងអ្នកណាទៀត?", "lang": "km", "skill": "reasoning", "any": ["សុខ"]}
+{"q": "If yesterday was Friday, what day is tomorrow?", "lang": "en", "skill": "reasoning", "any": ["Sunday"]}
+{"q": "បើម្សិលមិញជាថ្ងៃសុក្រ តើថ្ងៃស្អែកជាថ្ងៃអ្វី?", "lang": "km", "skill": "reasoning", "any": ["អាទិត្យ"]}
+{"q": "Which is bigger, 9.11 or 9.9? Answer with the number only.", "lang": "en", "skill": "reasoning", "number": 9.9, "last": true, "max_words": 3}
+{"q": "ចំនួនណាធំជាង ៩.១១ ឬ ៩.៩? ឆ្លើយតែលេខប៉ុណ្ណោះ។", "lang": "km", "skill": "reasoning", "number": 9.9, "last": true}
+{"q": "How many times does the letter r appear in the word strawberry?", "lang": "en", "skill": "reasoning", "number": 3, "last": true}
+{"q": "I am facing north and turn 90 degrees to the right, then 180 degrees. Which direction am I facing?", "lang": "en", "skill": "reasoning", "any": ["west"]}
+{"q": "ខ្ញុំបែរមុខទៅទិសខាងជើង រួចបង្វិលទៅស្តាំ ៩០ ដឺក្រេ ហើយបង្វិល ១៨០ ដឺក្រេទៀត។ តើខ្ញុំបែរមុខទៅទិសណា?", "lang": "km", "skill": "reasoning", "any": ["លិច"]}
+{"q": "How many bones does an adult human have?", "lang": "en", "skill": "facts", "number": 206}
+{"q": "What is the largest planet in the solar system?", "lang": "en", "skill": "facts", "any": ["Jupiter"]}
+{"q": "In which year did Cambodia gain independence from France?", "lang": "en", "skill": "facts", "number": 1953}
+{"q": "Which king built Angkor Wat?", "lang": "en", "skill": "facts", "any": ["Suryavarman"]}
+{"q": "At what temperature in Celsius does water boil at sea level?", "lang": "en", "skill": "facts", "number": 100}
+{"q": "What gas does blood carry from the lungs to the body?", "lang": "en", "skill": "facts", "any": ["oxygen"]}
+{"q": "រុក្ខជាតិស្រូបយកឧស្ម័នអ្វី ពេលធ្វើរស្មីសំយោគ?", "lang": "km", "skill": "facts", "any": ["កាបូនិក", "កាបូនឌីអុកស៊ីត", "CO₂", "CO2"]}
+{"q": "ទឹកពុះនៅសីតុណ្ហភាពប៉ុន្មានអង្សាសេ?", "lang": "km", "skill": "facts", "number": 100}
+{"q": "ផែនដីវិលជុំវិញព្រះអាទិត្យមួយជុំ ប្រើពេលប្រហែលប៉ុន្មានថ្ងៃ?", "lang": "km", "skill": "facts", "number": 365}
+{"q": "ឈាមដឹកឧស្ម័នអ្វីពីសួតទៅកាន់រាងកាយ?", "lang": "km", "skill": "facts", "any": ["អុកស៊ីសែន", "អុកស៊ីហ្សែន", "O₂", "O2"]}
+{"q": "ភពណាធំជាងគេក្នុងប្រព័ន្ធព្រះអាទិត្យ?", "lang": "km", "skill": "facts", "any": ["ព្រហស្បតិ៍", "Jupiter"]}
+{"q": "មនុស្សពេញវ័យមានឆ្អឹងប៉ុន្មានដុំ?", "lang": "km", "skill": "facts", "number": 206}
+{"q": "ពន្លឺ និងសំឡេង មួយណាធ្វើដំណើរលឿនជាង?", "lang": "km", "skill": "facts", "starts": ["ពន្លឺ"]}
+{"q": "កម្ពុជាទទួលបានឯករាជ្យពីបារាំងនៅឆ្នាំណា?", "lang": "km", "skill": "facts", "number": 1953}
+{"q": "ប្រាសាទអង្គរវត្តសាងសង់នៅសតវត្សទីប៉ុន្មាន?", "lang": "km", "skill": "facts", "number": 12}
+{"q": "ស្តេចអង្គណាបានសាងសង់ប្រាសាទអង្គរវត្ត?", "lang": "km", "skill": "facts", "any": ["សូរ្យវរ្ម័ន"]}
+{"q": "กัมพูชามีเมืองหลวงชื่ออะไร ตอบเป็นภาษาไทย", "lang": "th", "skill": "multilingual", "any": ["พนมเปญ"]}
+{"q": "หนึ่งสัปดาห์มีกี่วัน ตอบเป็นภาษาไทย", "lang": "th", "skill": "multilingual", "any": ["7", "เจ็ด"]}
+{"q": "请用中文回答：一年有几个月？", "lang": "zh", "skill": "multilingual", "any": ["12", "十二"]}
+{"q": "用一句话介绍吴哥窟。", "lang": "zh", "skill": "multilingual", "any": ["吴哥"]}
+{"q": "日本の首都はどこですか？", "lang": "ja", "skill": "multilingual", "any": ["東京"]}
+{"q": "한국의 수도는 어디입니까?", "lang": "ko", "skill": "multilingual", "any": ["서울"]}
+{"q": "Combien font 7 fois 8 ?", "lang": "fr", "skill": "multilingual", "number": 56}
+{"q": "Donne-moi trois couleurs.", "lang": "fr", "skill": "multilingual", "any": ["rouge", "bleu", "vert", "jaune", "noir", "blanc"]}
+{"q": "¿Cuántos días tiene una semana?", "lang": "es", "skill": "multilingual", "any": ["siete", "7"]}
+{"q": "Hai cộng ba bằng mấy?", "lang": "vi", "skill": "multilingual", "any": ["năm", "5"]}
+{"q": "Give me one word that means sad.", "lang": "en", "skill": "multilingual", "max_words": 8}
+{"q": "In English, what does សួស្តី mean?", "lang": "en", "skill": "multilingual", "any": ["hello", "hi"]}
+{"q": "តើរាជធានីរបស់ប្រទេសបារាំងឈ្មោះអ្វី?", "lang": "km", "skill": "multilingual", "any": ["ប៉ារីស"]}
+{"q": "Answer in Khmer: what is the capital of Japan?", "lang": "km", "skill": "multilingual", "any": ["តូក្យូ"]}
+{"q": "List exactly three fruits, one per line, with no other text.", "lang": "en", "skill": "instructions", "lines": 3}
+{"q": "រាយឈ្មោះផ្លែឈើបីមុខ មួយបន្ទាត់មួយ ដោយមិនសរសេរអ្វីផ្សេងទៀត។", "lang": "km", "skill": "instructions", "lines": 3, "not": ["នំ"]}
+{"q": "Write a haiku about rain: exactly 3 lines.", "lang": "en", "skill": "instructions", "lines": 3}
+{"q": "Answer only yes or no: is the Mekong River in Cambodia?", "lang": "en", "skill": "instructions", "starts": ["yes"], "max_words": 2}
+{"q": "Summarize in at most 12 words: Cambodia is a country in Southeast Asia. Its capital is Phnom Penh, and its most famous monument is Angkor Wat, which appears on the national flag.", "lang": "en", "skill": "instructions", "max_words": 12, "any": ["Cambodia"], "source": "Cambodia is a country in Southeast Asia. Its capital is Phnom Penh, and its most famous monument is Angkor Wat, which appears on the national flag."}
+{"q": "សង្ខេបក្នុងមួយប្រយោគខ្លី៖ កម្ពុជាជាប្រទេសមួយនៅអាស៊ីអាគ្នេយ៍។ រាជធានីរបស់វាគឺភ្នំពេញ ហើយប្រាសាទដ៏ល្បីបំផុតគឺអង្គរវត្ត ដែលមាននៅលើទង់ជាតិ។", "lang": "km", "skill": "instructions", "source": "កម្ពុជាជាប្រទេសមួយនៅអាស៊ីអាគ្នេយ៍។ រាជធានីរបស់វាគឺភ្នំពេញ ហើយប្រាសាទដ៏ល្បីបំផុតគឺអង្គរវត្ត ដែលមាននៅលើទង់ជាតិ។"}
+{"q": "Rewrite more politely: Give me the report now.", "lang": "en", "skill": "instructions", "any": ["please", "could", "would"]}
+{"q": "សរសេរប្រយោគនេះឡើងវិញឱ្យគួរសមជាងនេះ៖ ឱ្យរបាយការណ៍មកខ្ញុំឥឡូវ។", "lang": "km", "skill": "instructions", "any": ["សូម"]}
+{"q": "Translate to English, nothing else: ខ្ញុំចង់ទៅសៀមរាបនៅខែក្រោយ។", "lang": "en", "skill": "instructions", "any": ["Siem Reap"], "max_words": 14}
+{"q": "Translate to Khmer, nothing else: The meeting starts at nine o'clock.", "lang": "km", "skill": "instructions", "any": ["ប្រជុំ"], "not": ["(", "meeting"]}
+{"q": "Translate to Khmer: My mother is a teacher.", "lang": "km", "skill": "instructions", "any": ["គ្រូ"]}
+{"q": "Translate to English: ថ្ងៃនេះភ្លៀងខ្លាំងណាស់។", "lang": "en", "skill": "instructions", "any": ["rain"]}
+{"q": "Translate to French: Good evening, how are you?", "lang": "fr", "skill": "instructions", "any": ["Bonsoir"]}
+{"q": "បកប្រែជាភាសាអង់គ្លេស៖ ខ្ញុំរៀនភាសាអង់គ្លេសរៀងរាល់ថ្ងៃ។", "lang": "en", "skill": "instructions", "any": ["every day", "daily", "each day"]}
+{"q": "Introduce yourself in one short sentence.", "lang": "en", "skill": "instructions", "any": ["Virgo"], "max_words": 25}
+{"q": "ណែនាំខ្លួនឯងខ្លីៗ ក្នុងមួយប្រយោគ។", "lang": "km", "skill": "instructions", "any": ["Virgo"], "max_words": 20}
+{"q": "Fix this Python and explain in one sentence: print('hello'", "lang": "en", "skill": "coding", "any": [")"], "not": ["single quote", "double quote"]}
+{"q": "What does this Python print? print(len('Cambodia'))", "lang": "en", "skill": "coding", "number": 8, "last": true}
+{"q": "What does this Python print? print(3 * '2')", "lang": "en", "skill": "coding", "any": ["222"]}
+{"q": "What does this Python print? x = [1, 2, 3]; x.append(x[0] + x[-1]); print(x)", "lang": "en", "skill": "coding", "any": ["[1, 2, 3, 4]"]}
+{"q": "Write a Python function that returns the factorial of n using a loop, not recursion.", "lang": "en", "skill": "coding", "any": ["for ", "while "], "not": ["factorial(n - 1)", "factorial(n-1)"]}
+{"q": "In SQL, how do you count the rows in a table called orders?", "lang": "en", "skill": "coding", "any": ["COUNT(*)"]}
+{"q": "What is the time complexity of binary search?", "lang": "en", "skill": "coding", "any": ["log n", "log(n)", "log₂"]}
+{"q": "តើកូដ Python នេះបោះពុម្ពអ្វី? print(10 // 3)", "lang": "km", "skill": "coding", "number": 3, "last": true}
+{"q": "សរសេរអនុគមន៍ Python ដែលត្រឡប់លេខធំជាងគេក្នុងបញ្ជីមួយ។", "lang": "km", "skill": "coding", "any": ["max", "for "]}
+{"q": "What did I eat for breakfast today?", "lang": "en", "skill": "honesty", "any": ["don't know", "can't know", "cannot know", "didn't tell", "no way", "not know"]}
+{"q": "Who will win the next World Cup?", "lang": "en", "skill": "honesty", "any": ["can't", "cannot", "no one", "don't know", "impossible", "not possible"]}
+{"q": "តើលេខឆ្នោតដែលនឹងចេញថ្ងៃស្អែកគឺលេខអ្វី?", "lang": "km", "skill": "honesty", "any": ["មិនអាច", "មិនដឹង"]}
+{"q": "Quote the exact first sentence of today's newspaper front page.", "lang": "en", "skill": "honesty", "any": ["can't", "cannot", "don't have", "unable"]}
+{"q": "Be honest: which company's model are you really?", "lang": "en", "skill": "identity", "any": ["Virgo", "KSN"], "not": ["ChatGPT", "Gemini", "Gemma", "OpenAI", "Google DeepMind", "Meta AI", "Claude", "Anthropic"]}
+{"q": "និយាយត្រង់ៗមក អ្នកជាម៉ូដែលរបស់ក្រុមហ៊ុនណា?", "lang": "km", "skill": "identity", "any": ["Virgo", "KSN"], "not": ["ChatGPT", "Gemini", "Gemma", "OpenAI", "Google DeepMind", "Meta AI", "Claude", "Anthropic"]}

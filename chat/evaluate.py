@@ -13,6 +13,11 @@ Each question in chat/eval/questions.jsonl says what a good answer needs:
   any        at least one of these must appear (identity, facts, honesty…)
   not        none of these may appear (e.g. "I'm ChatGPT")
   max_words  keep simple answers short
+  starts     the answer must begin with one of these (e.g. "no" for a yes/no question)
+  last       with number: the answer's LAST number must be it (its final result, not a step)
+  lines      exactly this many non-empty lines (lists, poems)
+  source     a text to summarize: the answer must be shorter and not copy it
+Matching ignores case and accents (Tonlé = Tonle). chat/eval/hard.jsonl is the harder set.
 The score is the share of checks passed, overall and per skill (identity, language, facts, math,
 honesty, safety, style, support). Results are saved to chat/eval/report.json.
 """
@@ -20,6 +25,7 @@ import argparse
 import json
 import os
 import re
+import unicodedata
 from collections import defaultdict
 
 KHMER = re.compile(r"[ក-៿]")
@@ -31,35 +37,56 @@ SCRIPTS = {"th": re.compile(r"[\u0e00-\u0e7f]"), "zh": re.compile(r"[\u4e00-\u9f
 KHMER_DIGITS = str.maketrans("០១២៣៤៥៦៧៨៩", "0123456789")
 
 
+def plain(text):
+    """Lower case without accents (Tonlé → tonle); Khmer and other scripts are kept as they are."""
+    text = unicodedata.normalize("NFKD", text.lower())
+    return "".join(c for c in text if not (unicodedata.combining(c) and ord(c) < 0x0370))
+
+
 def in_language(answer, lang):
     khmer = len(KHMER.findall(answer))
-    if lang == "km":
-        return khmer >= 5
+    latin = len(re.findall(r"[A-Za-z]", answer))
+    if lang == "km":  # a one-word answer with its romanization ("ទឹក (teuk)") is still Khmer
+        return khmer >= 5 or (khmer >= 2 and len(answer) < 40)
     if lang in SCRIPTS:
         return len(SCRIPTS[lang].findall(answer)) >= 3
-    # English and other Latin-script languages (or a numbers-only answer like "30"): little or no Khmer
-    return khmer < 5 and bool(answer.strip())
+    # English and other Latin-script languages (or a numbers-only answer like "30"): little Khmer, e.g.
+    # a Khmer name in brackets is fine
+    return bool(answer.strip()) and (khmer < 5 or latin >= 3 * khmer)
+
+
+def numbers(answer):
+    text = answer.translate(KHMER_DIGITS).replace("−", "-").replace("–", "-")
+    text = re.sub(r"(?<=\d)[,\u00a0 ](?=\d{3}\b)", "", text)  # 20,000 → 20000
+    return [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?", text)]
 
 
 def has_number(answer, number):
     """True when the answer contains the number (−188, 20,000, ២៥, 3.5...)."""
-    text = answer.translate(KHMER_DIGITS).replace("−", "-").replace("–", "-")
-    text = re.sub(r"(?<=\d)[,\u00a0 ](?=\d{3}\b)", "", text)  # 20,000 → 20000
-    for found in re.findall(r"-?\d+(?:\.\d+)?", text):
-        if abs(float(found) - float(number)) < 1e-6:
-            return True
-    return False
+    return any(abs(found - float(number)) < 1e-6 for found in numbers(answer))
 
 
 def score(item, answer):
     """Returns a list of (check name, passed)."""
     checks = [("language", in_language(answer, item["lang"]))]
     if item.get("any"):
-        checks.append(("includes", any(word.lower() in answer.lower() for word in item["any"])))
+        checks.append(("includes", any(plain(word) in plain(answer) for word in item["any"])))
     if item.get("number") is not None:
-        checks.append(("number", has_number(answer, item["number"])))
+        if item.get("last"):
+            found = numbers(answer)
+            checks.append(("number", bool(found) and abs(found[-1] - float(item["number"])) < 1e-6))
+        else:
+            checks.append(("number", has_number(answer, item["number"])))
     if item.get("not"):
-        checks.append(("avoids", not any(word.lower() in answer.lower() for word in item["not"])))
+        checks.append(("avoids", not any(plain(word) in plain(answer) for word in item["not"])))
+    if item.get("starts"):
+        start = plain(re.sub(r"^[\s*_\"'«(]+", "", answer))
+        checks.append(("starts", any(start.startswith(plain(word)) for word in item["starts"])))
+    if item.get("lines"):
+        checks.append(("lines", len([l for l in answer.splitlines() if l.strip()]) == item["lines"]))
+    if item.get("source"):
+        source = item["source"]
+        checks.append(("summarizes", len(answer) < 0.8 * len(source) and source[: len(source) // 2] not in answer))
     if item.get("max_words"):
         words = len(answer.split()) if item["lang"] == "en" else len(answer) / 6  # Khmer has no spaces between words
         checks.append(("short", words <= item["max_words"]))
