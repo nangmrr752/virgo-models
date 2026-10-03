@@ -95,6 +95,11 @@ def split_languages(text):
     return out or [("km" if KHMER.search(text) else "en", text)]
 
 
+# What Whisper writes for noise or silence (from its training on subtitled videos).
+# Only phrases nobody says to an assistant: a real "thank you" or "អរគុណ" must still be heard.
+HALLUCINATIONS = {"thank you for watching", "thanks for watching", "please like and subscribe"}
+
+
 class VirgoSpeech:
     def __init__(self, stt_model=None):
         tuned_ready = os.path.isfile(os.path.join(STT_TUNED, "config.json")) or (
@@ -103,6 +108,7 @@ class VirgoSpeech:
         if not stt_model and not tuned_ready:
             print("Hearing: no Virgo Khmer ear found (", STT_TUNED, "): plain Whisper hears Khmer too")
         self.general_model = None if STT_GENERAL.lower() == "off" else STT_GENERAL
+        self._last_language = None  # the language just spoken: a close call leans to it
         if self.general_model == self.stt_model:
             self.general_model = None  # no Khmer-only model here: the one model does everything
         self._stt = None
@@ -153,12 +159,35 @@ class VirgoSpeech:
             f = pipe.feature_extractor(samples, sampling_rate=16000, return_tensors="pt").input_features
             return f.to(pipe.model.device, next(pipe.model.parameters()).dtype)
 
+        chosen = language
         if not language:  # the general Whisper decides the language (Virgo's Khmer hearing would say Khmer)
             judge = self._pipeline(general=True)
-            language = self._pick_language(judge.model, judge.tokenizer, features_for(judge))
+            feats = features_for(judge)
+            if self._no_speech(judge.model, judge.tokenizer, feats):
+                return ""  # noise or silence: nothing to write down (else Whisper makes words up)
+            language, sure = self._pick_language(judge.model, judge.tokenizer, feats, with_sureness=True)
+            if language and language not in KHMER_NAMES and sure < 0.97 and not self.general_model:
+                language = self._pick_language(judge.model, judge.tokenizer, feats)  # one model: Khmer by default
+            elif language and language not in KHMER_NAMES and sure < 0.97:
+                # Not sure it isn't Khmer: write it down both ways and keep the version the models are
+                # more confident about (a small lean to Khmer, and to the language just spoken).
+                other = self._decode(judge, feats, language)
+                khmer = self._decode(self._pipeline(), features_for(self._pipeline()), "khmer")
+                lean = 0.15 + (0.1 if self._last_language in KHMER_NAMES else -0.1 if self._last_language == language else 0)
+                if not KHMER.search(khmer[0]):
+                    lean -= 1  # the Khmer ear heard no Khmer at all
+                text, language = (khmer[0], "khmer") if khmer[1] + lean >= other[1] else (other[0], language)
+                self._last_language = language
+                return self._clean(text)
         pipe = self._pipeline(general=language not in KHMER_NAMES)
+        text = self._decode(pipe, features_for(pipe), language)[0]
+        if not chosen:
+            self._last_language = language
+        return self._clean(text)
+
+    def _decode(self, pipe, features, language):
+        """(text, confidence): the average log-probability per word piece, higher is surer."""
         model = pipe.model
-        features = features_for(pipe)
         kwargs = {"language": language, "task": "transcribe"} if language else {}
         # Careful listening: Whisper weighs several guesses (beam search) instead of taking the first.
         beams = int(os.environ.get("VIRGO_STT_BEAMS", "5"))
@@ -173,22 +202,75 @@ class VirgoSpeech:
                 kwargs["prompt_ids"] = pipe.tokenizer.get_prompt_ids(words, return_tensors="pt").to(model.device)
             except Exception:
                 pass
-        ids = model.generate(features, **kwargs)
+        out = model.generate(features, return_dict_in_generate=True, output_scores=True, **kwargs)
+        ids = out.sequences if hasattr(out, "sequences") else out
         text = pipe.tokenizer.batch_decode(ids, skip_special_tokens=True)[0].strip()
         if words and text.startswith(words):  # older transformers keep the prompt in the output
             text = text[len(words):].strip()
+        score = -99.0
+        try:
+            if getattr(out, "sequences_scores", None) is not None:  # beam search: already per word piece
+                score = float(out.sequences_scores[0])
+            elif getattr(out, "scores", None):
+                steps = model.compute_transition_scores(out.sequences, out.scores, normalize_logits=True)[0]
+                score = float(steps[torch.isfinite(steps)].mean())
+        except Exception:
+            pass
+        return text, score
+
+    @staticmethod
+    def _no_speech(model, tokenizer, features):
+        """True when Whisper is sure there's no speech (noise, breathing, silence)."""
+        try:
+            token = tokenizer.convert_tokens_to_ids("<|nospeech|>")
+            if token in (None, tokenizer.unk_token_id):
+                token = tokenizer.convert_tokens_to_ids("<|nocaptions|>")
+            if token in (None, tokenizer.unk_token_id):
+                return False
+            start = torch.tensor([[model.generation_config.decoder_start_token_id]], device=model.device)
+            logits = model(input_features=features, decoder_input_ids=start).logits[0, -1].float()
+            return float(torch.softmax(logits, -1)[token]) > float(os.environ.get("VIRGO_STT_NO_SPEECH", "0.6"))
+        except Exception:
+            return False
+
+    @staticmethod
+    def _clean(text):
+        """Drops the phrases Whisper makes up from noise ("Thank you.", "Subtitles by...")."""
+        plain = re.sub(r"[\s.!?,។]+", " ", text).strip().lower()
+        if plain in HALLUCINATIONS or any(plain.startswith(h) for h in ("subtitles by", "thanks for watching", "please subscribe")):
+            return ""
         return text
 
     @staticmethod
-    def _pick_language(model, tokenizer, features):
-        """The most likely of STT_LANGUAGES (Whisper's own language guess, limited to those)."""
+    def _pick_language(model, tokenizer, features, with_sureness=False):
+        """The most likely of STT_LANGUAGES (Whisper's own language guess, limited to those); with
+        with_sureness, (language, how sure Whisper is of it, 0-1)."""
+        best, sure = VirgoSpeech._pick(model, tokenizer, features)
+        if with_sureness or best is None:
+            return (WHISPER_NAMES.get(best, best) if best else None, sure) if with_sureness else None
+        # Khmer by default: general Whisper often mistakes Khmer for Lao, Thai, Burmese... and Khmer
+        # mixed with English is still Khmer. Another language only when Whisper is quite sure
+        # (VIRGO_STT_OTHER_MIN, default 0.8), and Khmer's neighbours only when it's very sure (0.97).
+        if best != "km" and VirgoSpeech._khmer_possible(tokenizer):
+            needed = 0.97 if best in LOOKALIKES else float(os.environ.get("VIRGO_STT_OTHER_MIN", "0.8"))
+            if sure < needed:
+                best = "km"
+        return WHISPER_NAMES.get(best, best)
+
+    @staticmethod
+    def _khmer_possible(tokenizer):
+        wanted = STT_LANGUAGES
+        return wanted == ["all"] or "km" in wanted
+
+    @staticmethod
+    def _pick(model, tokenizer, features):
         wanted = STT_LANGUAGES
         if wanted == ["all"]:
             lang_to_id = getattr(model.generation_config, "lang_to_id", None) or {}
             wanted = [t.strip("<|>") for t in lang_to_id] or ["km", "en"]
         codes = [c for c in wanted if tokenizer.convert_tokens_to_ids(f"<|{c}|>") not in (None, tokenizer.unk_token_id)]
         if len(codes) < 2:
-            return WHISPER_NAMES.get(codes[0], codes[0]) if codes else None
+            return (codes[0] if codes else None), 1.0
         try:
             start = torch.tensor([[model.generation_config.decoder_start_token_id]], device=model.device)
             logits = model(input_features=features, decoder_input_ids=start).logits[0, -1]
@@ -196,18 +278,10 @@ class VirgoSpeech:
             scores = logits[ids].float()
             probs = torch.softmax(scores, dim=-1)
             top = int(torch.argmax(probs))
-            best, sure = codes[top], float(probs[top])
-            # Khmer by default: general Whisper often mistakes Khmer for Lao, Thai, Burmese... and Khmer
-            # mixed with English is still Khmer. Another language only when Whisper is quite sure
-            # (VIRGO_STT_OTHER_MIN, default 0.8), and Khmer's neighbours only when it's very sure (0.97).
-            if "km" in codes and best != "km":
-                needed = 0.97 if best in LOOKALIKES else float(os.environ.get("VIRGO_STT_OTHER_MIN", "0.8"))
-                if sure < needed:
-                    best = "km"
-            return WHISPER_NAMES.get(best, best)
+            return codes[top], float(probs[top])
         except Exception as err:  # fall back to Whisper's free choice
             print("Virgo speech: language pick failed:", repr(err))
-            return None
+            return None, 0.0
 
     # ---------- Transcribe (long audio, with timestamps) ----------
     def transcribe(self, path, language=None):
