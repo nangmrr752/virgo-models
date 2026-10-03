@@ -58,3 +58,4 @@ Tips for adding more:
 - Keep facts that don't change (history, how-to). For news, prices or rates, teach Virgo to suggest Search.
 - Have a Khmer speaker check Khmer answers; natural wording matters more than quantity.
 - Several hundred to a few thousand good examples is a strong goal.
+| `distilled_smart.jsonl` | **Made on your GPU, not in git** (`bash scripts/train_local.sh distill`): Bayon-1.0-27B's answers to generated math, logic, instruction and other-language problems, each checked (right final number, right language, the format asked for); every problem in English and Khmer. Its good/bad answer pairs go to `chat/dpo/smart_pairs.jsonl` for DPO. Both live in your Hugging Face dataset Data-1.0. |
