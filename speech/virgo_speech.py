@@ -101,6 +101,7 @@ HALLUCINATIONS = {"thank you for watching", "thanks for watching", "please like 
 
 
 class VirgoSpeech:
+    _runner_up = None  # Whisper's second guess for the last clip (set by _pick)
     def __init__(self, stt_model=None):
         tuned_ready = os.path.isfile(os.path.join(STT_TUNED, "config.json")) or (
             bool(os.environ.get("VIRGO_STT_KHMER_MODEL")) and not os.path.isdir(STT_TUNED))  # a Hugging Face repo
@@ -164,8 +165,13 @@ class VirgoSpeech:
             judge = self._pipeline(general=True)
             feats = features_for(judge)
             if self._no_speech(judge.model, judge.tokenizer, feats):
+                print("Heard: (no speech)", flush=True)
                 return ""  # noise or silence: nothing to write down (else Whisper makes words up)
             language, sure = self._pick_language(judge.model, judge.tokenizer, feats, with_sureness=True)
+            if language in KHMER_NAMES and sure < 0.7 and self.general_model and self._runner_up:
+                # An unsure "Khmer": check it against Whisper's second guess the same way (English said
+                # quickly or with a Khmer accent is often half-taken for Khmer).
+                language, sure = WHISPER_NAMES.get(self._runner_up, self._runner_up), 1 - sure
             if language and language not in KHMER_NAMES and sure < 0.97 and not self.general_model:
                 language = self._pick_language(judge.model, judge.tokenizer, feats)  # one model: Khmer by default
             elif language and language not in KHMER_NAMES and sure < 0.97:
@@ -176,13 +182,19 @@ class VirgoSpeech:
                 lean = 0.15 + (0.1 if self._last_language in KHMER_NAMES else -0.1 if self._last_language == language else 0)
                 if not KHMER.search(khmer[0]):
                     lean -= 1  # the Khmer ear heard no Khmer at all
+                print(f"Heard: close call {language} {sure:.2f} → Khmer ear {khmer[1]:.2f}+{lean:.2f} vs "
+                      f"{language} ear {other[1]:.2f}", flush=True)
                 text, language = (khmer[0], "khmer") if khmer[1] + lean >= other[1] else (other[0], language)
+                print(f"Heard [{language}]: {text[:80]}", flush=True)
                 self._last_language = language
                 return self._clean(text)
         pipe = self._pipeline(general=language not in KHMER_NAMES)
         text = self._decode(pipe, features_for(pipe), language)[0]
         if not chosen:
             self._last_language = language
+            print(f"Heard [{language}, sure {sure:.2f}]: {text[:80]}", flush=True)
+        else:
+            print(f"Heard [{language}, chosen by the page]: {text[:80]}", flush=True)
         return self._clean(text)
 
     def _decode(self, pipe, features, language):
@@ -277,8 +289,9 @@ class VirgoSpeech:
             ids = [tokenizer.convert_tokens_to_ids(f"<|{c}|>") for c in codes]
             scores = logits[ids].float()
             probs = torch.softmax(scores, dim=-1)
-            top = int(torch.argmax(probs))
-            return codes[top], float(probs[top])
+            order = torch.argsort(probs, descending=True).tolist()
+            VirgoSpeech._runner_up = codes[order[1]] if len(order) > 1 else None
+            return codes[order[0]], float(probs[order[0]])
         except Exception as err:  # fall back to Whisper's free choice
             print("Virgo speech: language pick failed:", repr(err))
             return None, 0.0
