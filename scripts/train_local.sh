@@ -53,8 +53,11 @@ git pull -q
   python -c "from huggingface_hub import hf_hub_download as d; d('$DATA_REPO', 'distilled_gemma27b.jsonl', repo_type='dataset', local_dir='chat/data')" >/dev/null 2>&1 \
     && echo "➕ Using the Gemma 27B examples" || echo "No Gemma 27B examples yet"
   # Checked examples from scripts/distill_smart.py (bash scripts/train_local.sh distill), when made.
-  python -c "from huggingface_hub import hf_hub_download as d; d('$DATA_REPO', 'distilled_smart.jsonl', repo_type='dataset', local_dir='chat/data')" >/dev/null 2>&1 \
-    && echo "➕ Using $(wc -l < chat/data/distilled_smart.jsonl) checked examples (distill_smart)" || echo "No checked examples yet (bash scripts/train_local.sh distill)"
+  # (distilled_smart_kaggle.jsonl: the same, made on Kaggle with chat/distill_kaggle.ipynb.)
+  for f in distilled_smart.jsonl distilled_smart_kaggle.jsonl; do
+    python -c "from huggingface_hub import hf_hub_download as d; d('$DATA_REPO', '$f', repo_type='dataset', local_dir='chat/data')" >/dev/null 2>&1 \
+      && echo "➕ Using $(wc -l < chat/data/$f) checked examples ($f)" || true
+  done
   DATA="chat/data/*.jsonl"
   # The model's own copy of the data, where Virgo calls itself by this model's standard name
   # (Bayon-1.0 / Angkor-1.0).

@@ -56,6 +56,9 @@ def load_teacher(name):
         tok.pad_token = tok.eos_token
     big_gpu = torch.cuda.get_device_properties(0).total_memory > 60e9
     kwargs = {"dtype": torch.bfloat16, "device_map": {"": 0}}
+    if torch.cuda.device_count() > 1 and not big_gpu:  # e.g. Kaggle's 2 × T4 (16 GB each): 27B split over both
+        kwargs["device_map"] = "auto"
+        kwargs["max_memory"] = {i: "13GiB" for i in range(torch.cuda.device_count())}
     if not big_gpu:  # 27B in 4 bits (~16 GB) fits a 24 GB L4
         kwargs["quantization_config"] = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
     try:

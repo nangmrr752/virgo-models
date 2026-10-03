@@ -297,6 +297,7 @@ def main():
     p.add_argument("--batch", type=int, default=6, help="tasks per step (each answered twice); lower it if the GPU runs out of memory")
     p.add_argument("--hf-repo", help="private Hugging Face dataset to save both files to as they grow")
     p.add_argument("--upload-every", type=int, default=300)
+    p.add_argument("--hours", type=float, default=0, help="stop (and save) after this many hours, e.g. 11 on Kaggle's 12-hour limit")
     args = p.parse_args()
     os.makedirs(os.path.dirname(args.pairs), exist_ok=True)
 
@@ -317,7 +318,10 @@ def main():
         return
 
     tok, model = load_teacher(args.teacher, args.adapter)
-    rng = random.Random(1000 + done)
+    rng = random.Random()  # fresh problems on every machine and run (Kaggle and your server never repeat each other)
+    import time
+
+    deadline = time.time() + args.hours * 3600 if args.hours else None
     tried = kept = 0
     uploaded = done
 
@@ -335,7 +339,7 @@ def main():
         print(f"☁️ Saved to {args.hf_repo}", flush=True)
 
     with open(args.out, "a", encoding="utf-8") as out, open(args.pairs, "a", encoding="utf-8") as pair_file:
-        while done < args.target:
+        while done < args.target and not (deadline and time.time() > deadline):
             tasks = [t for t in make_tasks(rng, args.batch) if norm(t["q"]) not in seen]
             if not tasks:
                 continue
@@ -376,6 +380,8 @@ def main():
                 upload()
                 uploaded = done
     upload()
+    if deadline and time.time() > deadline and done < args.target:
+        print(f"⏱️ Time limit: stopped at {done}/{args.target}. Run again to continue.")
     print(f"✅ Done: {done} verified examples in {args.out}, {pairs} DPO pairs in {args.pairs}")
 
 
