@@ -88,7 +88,7 @@
 {"q": "បឹងធំនៅកម្ពុជាឈ្មោះអ្វី?", "lang": "km", "skill": "facts", "any": ["ទន្លេសាប"]}
 {"q": "ប្រាសាទអង្គរវត្តស្ថិតនៅខេត្តណា?", "lang": "km", "skill": "facts", "any": ["សៀមរាប"]}
 {"q": "ប្រទេសណាខ្លះមានព្រំដែនជាប់កម្ពុជា?", "lang": "km", "skill": "facts", "any": ["ថៃ", "ឡាវ", "វៀតណាម"]}
-{"q": "សាសនាចម្បងនៅកម្ពុជាគឺសាសនាអ្វី?", "lang": "km", "skill": "facts", "any": ["ព្រះពុទ្ធ"]}
+{"q": "សាសនាចម្បងនៅកម្ពុជាគឺសាសនាអ្វី?", "lang": "km", "skill": "facts", "any": ["ពុទ្ធ"]}
 {"q": "ភាសាផ្លូវការរបស់កម្ពុជាគឺភាសាអ្វី?", "lang": "km", "skill": "facts", "any": ["ខ្មែរ"]}
 {"q": "ភពណាដែលនៅជិតព្រះអាទិត្យជាងគេ?", "lang": "km", "skill": "facts", "any": ["ពុធ"]}
 {"q": "ទឹកមានរូបមន្តគីមីអ្វី?", "lang": "km", "skill": "facts", "any": ["H2O", "H₂O"]}
@@ -116,7 +116,7 @@
 {"q": "Write SQL to select all rows from a table called users.", "lang": "en", "skill": "coding", "any": ["SELECT", "users"]}
 {"q": "What does HTML stand for?", "lang": "en", "skill": "coding", "any": ["HyperText Markup Language", "Hypertext Markup Language"]}
 {"q": "In Python, how do you read a file line by line?", "lang": "en", "skill": "coding", "any": ["open", "for"]}
-{"q": "Fix this Python: print('hello'", "lang": "en", "skill": "coding", "any": [")"]}
+{"q": "Fix this Python: print('hello'", "lang": "en", "skill": "coding", "any": [")"], "not": ["single quote", "double quote"]}
 {"q": "Write a Python one-liner to reverse a string s.", "lang": "en", "skill": "coding", "any": ["[::-1]", "reversed"]}
 {"q": "សរសេរកូដ Python មួយសម្រាប់បូកលេខពីរ។", "lang": "km", "skill": "coding", "any": ["def ", "+", "print"]}
 {"q": "ពន្យល់ថា loop នៅក្នុងកម្មវិធីគឺជាអ្វី។", "lang": "km", "skill": "coding", "any": ["ម្តងហើយម្តងទៀត", "ដដែល", "loop", "ច្រំដែល"]}
@@ -151,9 +151,9 @@
 {"q": "សូមផ្តល់ពាក្យមួយដែលមានន័យថា សប្បាយ។", "lang": "km", "skill": "style", "max_words": 10}
 {"q": "សរសេរសារស្វាគមន៍ពីរប្រយោគសម្រាប់ហាងកាហ្វេ។", "lang": "km", "skill": "style", "any": ["កាហ្វេ"], "max_words": 60}
 {"q": "សរសេរសារអរគុណខ្លីមួយទៅលោកគ្រូ។", "lang": "km", "skill": "style", "any": ["អរគុណ"], "max_words": 80}
-{"q": "សង្ខេបមួយប្រយោគ៖ ទន្លេមេគង្គហូរកាត់ប្រទេសចំនួនប្រាំមួយ ហើយផ្តល់ត្រី និងទឹកសម្រាប់ធ្វើកសិកម្មដល់មនុស្សរាប់លាននាក់។", "lang": "km", "skill": "style", "any": ["មេគង្គ"], "max_words": 40}
+{"q": "សង្ខេបមួយប្រយោគ៖ ទន្លេមេគង្គហូរកាត់ប្រទេសចំនួនប្រាំមួយ ហើយផ្តល់ត្រី និងទឹកសម្រាប់ធ្វើកសិកម្មដល់មនុស្សរាប់លាននាក់។", "lang": "km", "skill": "style", "any": ["មេគង្គ"], "max_words": 40, "source": "ទន្លេមេគង្គហូរកាត់ប្រទេសចំនួនប្រាំមួយ ហើយផ្តល់ត្រី និងទឹកសម្រាប់ធ្វើកសិកម្មដល់មនុស្សរាប់លាននាក់។"}
 {"q": "សរសេរអ៊ីមែលគួរសមមួយ ដើម្បីសុំច្បាប់ឈប់សម្រាកថ្ងៃស្អែក។", "lang": "km", "skill": "style", "any": ["ស្អែក"], "max_words": 150}
-{"q": "រាយឈ្មោះផ្លែឈើបីមុខ។", "lang": "km", "skill": "style", "max_words": 25}
+{"q": "រាយឈ្មោះផ្លែឈើបីមុខ។", "lang": "km", "skill": "style", "max_words": 25, "not": ["នំ"]}
 {"q": "How can I sleep better?", "lang": "en", "skill": "support", "any": ["sleep"]}
 {"q": "Give me three tips to save money.", "lang": "en", "skill": "support", "any": ["save", "budget", "spend"]}
 {"q": "How do I prepare for a job interview?", "lang": "en", "skill": "support", "any": ["practice", "research", "prepare"]}
@@ -168,7 +168,7 @@
 {"q": "បើខ្ញុំក្តៅខ្លួន ខ្ញុំគួរធ្វើអ្វី?", "lang": "km", "skill": "support", "any": ["សម្រាក", "ទឹក", "គ្រូពេទ្យ", "វេជ្ជបណ្ឌិត"]}
 {"q": "Bonjour ! Comment vas-tu ?", "lang": "fr", "skill": "multilingual"}
 {"q": "Quelle est la capitale du Cambodge ?", "lang": "fr", "skill": "multilingual", "any": ["Phnom Penh"]}
-{"q": "¿Cuál es la capital de Camboya?", "lang": "es", "skill": "multilingual", "any": ["Phnom Penh"]}
+{"q": "¿Cuál es la capital de Camboya?", "lang": "es", "skill": "multilingual", "any": ["Phnom Penh", "Nom Pen"]}
 {"q": "Hola, ¿cómo estás?", "lang": "es", "skill": "multilingual"}
 {"q": "สวัสดีครับ คุณชื่ออะไร", "lang": "th", "skill": "multilingual", "any": ["Virgo"]}
 {"q": "เมืองหลวงของกัมพูชาคืออะไร", "lang": "th", "skill": "multilingual", "any": ["พนมเปญ"]}
