@@ -31,6 +31,7 @@ Open the link → **Runtime → Change runtime type → T4 GPU** → **Runtime �
 On an Ubuntu machine with an NVIDIA GPU (e.g. RTX 4090), see **[LOCAL.md](LOCAL.md)**: one setup script, then
 `bash scripts/train_local.sh bayon 27b` trains and uploads a model (also `angkor`, `hearing`, `voice`, `voice bayon`).
 No GPU server? Open **`train_cloud.ipynb`** on Colab or Kaggle: the same training, picked from a list.
+Model names: **[MODELS.md](MODELS.md)**.
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nangmrr752/virgo-models/blob/main/train_cloud.ipynb)
 
 ## Virgo-1.0-Bayon
