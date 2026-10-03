@@ -3,6 +3,7 @@
 #
 #   bash scripts/train_local.sh bayon 27b     # Virgo-1.0-Bayon on Gemma 3 27B, smarter than Angkor (default)
 #                                            #   (also: bayon 12b → Virgo-1.0-Bayon-12B, bayon 4b → Virgo-1.0-Bayon-4B)
+#   bash scripts/train_local.sh score         # score the running Virgo server on the test set (chat/eval)
 #   bash scripts/train_local.sh hearing       # Virgo's hearing (Whisper, Khmer), see train_hearing_local.sh
 #   bash scripts/train_local.sh voice         # Virgo's live voice (VoxCPM2), see train_voice_local.sh
 #   bash scripts/train_local.sh angkor 12b    # Virgo-1.0-Angkor-12B (also: angkor 4b → Virgo-1.0-Angkor)
@@ -15,6 +16,7 @@ CODE="$(cd "$(dirname "$0")/.." && pwd)"
 source "$CODE/scripts/env_auto.sh"   # your server (env.sh), Colab or Kaggle
 ROOT="$VIRGO_HOME"
 [ "${1:-}" = voice ] && { shift; exec bash "$CODE/scripts/train_voice_local.sh" "$@"; }  # Virgo's live voice
+[ "${1:-}" = score ] && { shift; exec bash "$CODE/scripts/score_server.sh" "$@"; }  # score the running server
 [ "${1:-}" = hearing ] && { shift; exec bash "$CODE/scripts/train_hearing_local.sh" "$@"; }  # Virgo's hearing (Whisper)
 WHICH="${1:-bayon}"; DEFAULT_SIZE=12b; [ "$WHICH" = bayon ] && DEFAULT_SIZE=27b
 # Smaller GPUs (Colab/Kaggle T4, 16 GB): 27B doesn't fit, so Bayon defaults to 12B there.
