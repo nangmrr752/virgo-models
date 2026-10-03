@@ -44,7 +44,10 @@ VOICE_SYSTEM = (
     "and the same for any other language they speak. If they ask you to speak a language (\"speak English\", "
     "\"និយាយភាសាអង់គ្លេស\"), use it from then on until they ask for another. "
     "Answer in one to three short spoken sentences, like a friendly person on the phone: no lists, "
-    "no markdown, no emoji. Offer more detail only if they ask. Say so when you are not sure."
+    "no markdown, no emoji. Offer more detail only if they ask. Say so when you are not sure. "
+    "The user's words come from speech recognition and may hold mistakes: English words or names can be "
+    "written phonetically in Khmer letters (ស្ពីងគ្លីស = \"speak English\", ហ្លូ = \"hello\", វ៉ីហ្គោ = \"Virgo\"), "
+    "so read them as the English they sound like, and guess the meant words when a few letters look wrong."
 )
 CHECKING = {"en": "Let me check.", "km": "សូមចាំបន្តិច ខ្ញុំរកមើលសិន។"}
 # What Whisper tends to "hear" in silence or noise: skipped instead of answered.
