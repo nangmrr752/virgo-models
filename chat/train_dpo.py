@@ -62,10 +62,11 @@ def main():
     model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
     model.enable_input_require_grads()
     model.config.use_cache = False
-    # The adapter twice: "train" learns, "reference" stays as the SFT model it is compared with.
-    model = PeftModel.from_pretrained(model, args.adapter, adapter_name="train", is_trainable=True)
+    # The adapter twice: "policy" learns, "reference" stays as the SFT model it is compared with.
+    # (Not "train": that's a PyTorch method name, so PEFT can't use it.)
+    model = PeftModel.from_pretrained(model, args.adapter, adapter_name="policy", is_trainable=True)
     model.load_adapter(args.adapter, adapter_name="reference")
-    model.set_adapter("train")
+    model.set_adapter("policy")
 
     rows = load_pairs(args.pairs, tok, "gemma" in base.lower())
     print(f"{len(rows)} DPO pairs", flush=True)
@@ -75,7 +76,7 @@ def main():
         max_length=args.max_len, max_prompt_length=min(512, args.max_len // 2), logging_steps=10, save_strategy="no",
         report_to=[], bf16=torch.cuda.is_available() and torch.cuda.is_bf16_supported(),
         gradient_checkpointing=True, gradient_checkpointing_kwargs={"use_reentrant": False},
-        model_adapter_name="train", ref_adapter_name="reference", optim="paged_adamw_8bit",
+        model_adapter_name="policy", ref_adapter_name="reference", optim="paged_adamw_8bit",
     )
     import inspect
 
@@ -86,9 +87,9 @@ def main():
     trainer_kwargs["processing_class" if "processing_class" in trainer_params else "tokenizer"] = tok
     DPOTrainer(**trainer_kwargs).train()
 
-    model.save_pretrained(args.out, selected_adapters=["train"])
+    model.save_pretrained(args.out, selected_adapters=["policy"])
     # peft saves a named adapter in a subfolder: move it up so the folder loads like any Virgo adapter.
-    sub = os.path.join(args.out, "train")
+    sub = os.path.join(args.out, "policy")
     if os.path.isdir(sub):
         for name in os.listdir(sub):
             os.replace(os.path.join(sub, name), os.path.join(args.out, name))
