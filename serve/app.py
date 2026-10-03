@@ -68,7 +68,7 @@ def load_chat(model=None):
         index = list(models).index(model)
         gpu = 0 if gpus <= 1 or index == 0 else gpus - 1 - (index - 1) % (gpus - 1)
         folder = models[model]
-        name = "Virgo-Bayon-1.0" if "bayon" in model else "Virgo-Angkor-1.0"
+        name = "Bayon-1.0" if "bayon" in model else "Angkor-1.0"
         _models[key] = VirgoChat(adapter=folder if os.path.isdir(folder) else None, gpu=gpu, name=name)
         print(f"Chat model {model} ready on GPU {gpu}")
     return _models[key]
@@ -269,7 +269,7 @@ async def realtime(ws: WebSocket):
     # ?model=virgo-1.0-bayon: that model talks (the server's first model when not given or not here).
     model = ws.query_params.get("model")
     model = model if model in chat_models() else next(iter(chat_models()))
-    # The live voice has its own name: Virgo-Bakong-{VIRGO_LIVE_VERSION} (2.0), answering with Angkor or Bayon.
-    chat_name = "Virgo-Bayon-1.0" if "bayon" in model else "Virgo-Angkor-1.0"
-    name = f"Virgo-Bakong-{os.environ.get('VIRGO_LIVE_VERSION', '2.0').strip()}, KSN's real-time voice, answering with {chat_name}"
+    # The live voice has its own name: Bakong-{VIRGO_LIVE_VERSION} (2.0), answering with Angkor or Bayon.
+    chat_name = "Bayon-1.0" if "bayon" in model else "Angkor-1.0"
+    name = f"Bakong-{os.environ.get('VIRGO_LIVE_VERSION', '2.0').strip()}, KSN's real-time voice, answering with {chat_name}"
     await handle(Adapter(), load_chat(model), load("speech"), _models["vad"], name)

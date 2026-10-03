@@ -46,9 +46,19 @@ big_gpu = gpus[0].total_memory > 20e9
 
 from huggingface_hub import HfApi, login, snapshot_download  # noqa: E402
 
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+from names import candidates  # noqa: E402  (Virgo's model names: standard first, then old ones)
+
 login(token=need("HF_TOKEN"))
 api = HfApi()
 me = api.whoami()["name"]
+
+
+def has_file(repo, name):
+    try:
+        return api.file_exists(repo, name)
+    except Exception:
+        return False
 
 # snapshot_download only fetches what changed, so a restart picks up newly trained models.
 # VIRGO_MAIN=bayon: Bayon instead of Angkor (Bayon 27B and Angkor don't both fit one 24 GB GPU).
@@ -56,17 +66,15 @@ bayon_only = os.environ.get("VIRGO_MAIN", "angkor").lower() == "bayon"
 ADAPTER = link_to_workspace("chat/out/virgo-1.0-chat-lora")
 if not bayon_only:
     repo = os.environ.get("HF_MODEL") or next(
-        (r for r in (f"{me}/{n}" for n in ("Virgo-Angkor-1.0-12B", "Virgo-1.0-Angkor-12B", "Virgo-Angkor-1.0-4B", "Virgo-1.0-Angkor"))
-         if api.file_exists(r, "adapter_config.json")),
-        f"{me}/Virgo-Angkor-1.0-4B")  # standard names first (scripts/names.py), then the old ones
+        (r for r in candidates("Angkor-1.0-12B", api) + candidates("Angkor-1.0-4B", api) if has_file(r, "adapter_config.json")),
+        candidates("Angkor-1.0-4B", api)[-1])
     print("⬇️ Downloading", repo)
     snapshot_download(repo, local_dir=ADAPTER)
 os.environ["VIRGO_CHAT_MODELS"] = "" if bayon_only else f"virgo-1.0-angkor={ADAPTER}"
 
 if bayon_only or os.environ.get("SERVE_BAYON", "1") != "0":
     has_bayon = False
-    for bayon_repo in (f"{me}/{n}" for n in ("Virgo-Bayon-1.0-27B", "Virgo-1.0-Bayon", "Virgo-Bayon-1.0-12B", "Virgo-1.0-Bayon-12B",
-                                              "Virgo-Bayon-1.0-4B", "Virgo-1.0-Bayon-4B")):
+    for bayon_repo in candidates("Bayon-1.0-27B", api) + candidates("Bayon-1.0-12B", api) + candidates("Bayon-1.0-4B", api):
         try:
             has_bayon = api.file_exists(bayon_repo, "config.json") or api.file_exists(bayon_repo, "adapter_config.json")
         except Exception:
@@ -77,7 +85,7 @@ if bayon_only or os.environ.get("SERVE_BAYON", "1") != "0":
     from fit import bayon_fits
 
     if bayon_only and not has_bayon:
-        sys.exit("❌ VIRGO_MAIN=bayon, but there's no Virgo-Bayon-1.0 on your Hugging Face account yet.")
+        sys.exit("❌ VIRGO_MAIN=bayon, but there's no Bayon-1.0 on Hugging Face yet (your account or VIRGO_HF_ORG).")
     if has_bayon and (bayon_only or bayon_fits(bayon_repo)):
         BAYON = link_to_workspace("chat/out/virgo-1.0-bayon")
         print("⬇️ Checking", bayon_repo)
@@ -102,8 +110,7 @@ for spec in filter(None, os.environ["VIRGO_CHAT_MODELS"].split(",")):
 HEARING = link_to_workspace("speech/out/virgo-1.0-stt")
 if True:
     try:
-        hearing_repo = next((f"{me}/{n}" for n in ("Virgo-Angkor-1.0-STT", "Virgo-1.0-Angkor-Hearing")
-                             if api.file_exists(f"{me}/{n}", "config.json")), None)
+        hearing_repo = next((r for r in candidates("Angkor-1.0-STT", api) if has_file(r, "config.json")), None)
         if hearing_repo:
             print("⬇️ Downloading Virgo's Khmer hearing:", hearing_repo)
             snapshot_download(hearing_repo, local_dir=HEARING)
@@ -137,19 +144,14 @@ if os.environ.get("USE_VIRGO_VOICE", "1") != "0":
     subprocess.run([python, "-c", "from huggingface_hub import snapshot_download; snapshot_download('openbmb/VoxCPM2')"], check=True)
     os.environ["VIRGO_VOX_PYTHON"] = python
     # Which voice: Virgo-Bakong-{VIRGO_LIVE_VERSION}-TTS when it exists (train_local.sh voice bakong),
-    # else Bayon's own voice when Bayon is the chat model (voice bayon), else Virgo-Angkor-1.0-TTS.
+    # else Bayon's own voice when Bayon is the chat model (voice bayon), else Angkor-1.0-TTS.
     # Standard names first (scripts/names.py), then the old ones.
     # VIRGO_VOICE_REPO=<name> picks one by hand.
-    def has_voice(name):
-        try:
-            return api.file_exists(f"{me}/{name}", "voice.wav")
-        except Exception:
-            return False
-
     live_version = os.environ.get("VIRGO_LIVE_VERSION", "2.0").strip()
-    candidates = [os.environ.get("VIRGO_VOICE_REPO", ""), f"Virgo-Bakong-{live_version}-TTS", f"Virgo-Bakong-{live_version}-Voice",
-                  *(["Virgo-Bayon-1.0-TTS", "Virgo-1.0-Bayon-Voice"] if bayon_only else []), "Virgo-Angkor-1.0-TTS", "Virgo-1.0-Angkor-Voice"]
-    voice_repo = f"{me}/" + next((c for c in candidates if c and has_voice(c)), "Virgo-Angkor-1.0-TTS")
+    picked = os.environ.get("VIRGO_VOICE_REPO", "").strip()
+    voices = ([picked if "/" in picked else f"{me}/{picked}"] if picked else []) + candidates(f"Bakong-{live_version}-TTS", api) \
+        + (candidates("Bayon-1.0-TTS", api) if bayon_only else []) + candidates("Angkor-1.0-TTS", api)
+    voice_repo = next((r for r in voices if has_file(r, "voice.wav")), candidates("Angkor-1.0-TTS", api)[-1])
     os.environ["VIRGO_VOX_REPO"] = voice_repo
     # Each voice keeps its own folder, so switching voices never mixes their files.
     os.environ["VIRGO_VOX_DIR"] = link_to_workspace("speech/out/" + voice_repo.split("/")[1].lower())

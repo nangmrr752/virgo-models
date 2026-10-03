@@ -15,5 +15,10 @@ else
     || python -m pip install -q -r "$CODE/requirements-train.txt"
   python -m pip uninstall -y -q torchao 2>/dev/null || true  # conflicts with newer peft
 fi
+# Virgo's Hugging Face organization (VIRGO_HF_ORG in .env), where models are saved: scripts/names.py.
+if [ -z "${VIRGO_HF_ORG:-}" ] && [ -f "$CODE/.env" ]; then
+  VIRGO_HF_ORG=$(grep -E '^VIRGO_HF_ORG=' "$CODE/.env" | tail -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//; s/^["'"'"']//; s/["'"'"']$//')
+  export VIRGO_HF_ORG
+fi
 # GPU memory in GB (0 without a GPU): scripts pick sizes that fit.
 GPU_GB=$(python -c "import torch; print(int(torch.cuda.get_device_properties(0).total_memory / 1e9) if torch.cuda.is_available() else 0)" 2>/dev/null || echo 0)
