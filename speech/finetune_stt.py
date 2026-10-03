@@ -10,6 +10,14 @@ a normal Whisper model. Data:
   - your own recordings (--extra): .wav files + metadata.csv of `file_name,sentence`
 It prints the Khmer character error rate (CER) before and after training, on clips it never trained
 on. The result goes to speech/out/virgo-1.0-stt, which virgo_speech.py uses automatically.
+
+One model for every language (--multilingual): Khmer plus English and other languages from Google
+FLEURS (CC BY 4.0), each clip with its own language tag, so Whisper learns Khmer without forgetting the
+rest or how to tell languages apart. Start it from openai/whisper-large-v3-turbo. It's uploaded only
+when Khmer is at least as good as the current hearing and the other languages stay within 15% of the
+base model; the server then uses it alone (no second Whisper).
+
+    python speech/finetune_stt.py --multilingual --base openai/whisper-large-v3-turbo --push virgoai/Angkor-1.0-STT
 """
 import argparse
 import csv
@@ -77,6 +85,66 @@ def fleurs(work):
     return read_extra(folder)
 
 
+FLEURS_CONFIGS = {"en": "en_us", "zh": "cmn_hans_cn", "fr": "fr_fr", "ja": "ja_jp", "ko": "ko_kr", "th": "th_th",
+                  "vi": "vi_vn", "de": "de_de", "es": "es_419", "ru": "ru_ru", "id": "id_id", "lo": "lo_la"}
+
+
+def other_languages(work, spec):
+    """Clips in other languages from Google FLEURS, as (path, text, language code). spec: "en:2000,zh:300"."""
+    import io
+
+    import soundfile as sf
+
+    rows = []
+    for part in filter(None, (x.strip() for x in spec.split(","))):
+        code, _, count = part.partition(":")
+        count, config = int(count or 300), FLEURS_CONFIGS.get(code)
+        if not config:
+            print(f"{code}: no FLEURS set for it, skipped")
+            continue
+        folder = os.path.join(work, "other", code)
+        index = os.path.join(folder, "metadata.csv")
+        if not os.path.exists(index):
+            data = None
+            for kwargs in ({"revision": "refs/convert/parquet"}, {}, {"trust_remote_code": True}):
+                try:
+                    from datasets import Audio, load_dataset
+
+                    data = load_dataset("google/fleurs", config, split="train", streaming=True, **kwargs)
+                    data = data.cast_column("audio", Audio(decode=False))
+                    next(iter(data))
+                    break
+                except Exception as err:
+                    data, last = None, err
+            if data is None:
+                print(f"FLEURS {config} skipped: {type(last).__name__}: {str(last)[:150]}")
+                continue
+            os.makedirs(folder, exist_ok=True)
+            kept = 0
+            with open(index + ".part", "w", encoding="utf-8", newline="") as f:
+                out = csv.writer(f)
+                out.writerow(["file_name", "sentence"])
+                for i, row in enumerate(data):
+                    if kept >= count:
+                        break
+                    text = (row.get("raw_transcription") or row.get("transcription") or "").strip()
+                    try:
+                        audio = row["audio"]
+                        wave, rate = sf.read(io.BytesIO(audio["bytes"]) if audio.get("bytes") else audio["path"], dtype="float32")
+                    except Exception:
+                        continue
+                    if not text:
+                        continue
+                    name = f"{i:05d}.wav"
+                    sf.write(os.path.join(folder, name), wave, rate)
+                    out.writerow([name, text])
+                    kept += 1
+            os.replace(index + ".part", index)
+            print(f"✅ FLEURS {config}: {kept} clips")
+        rows += [(path, text, code) for path, text in read_extra(folder)]
+    return rows
+
+
 TEXT_COLUMNS = ["sentence", "transcription", "transcript", "text", "normalized_text", "raw_transcription", "label"]
 
 
@@ -142,9 +210,9 @@ class Clips(torch.utils.data.Dataset):
     def __getitem__(self, i):
         import librosa
 
-        path, text = self.rows[i]
+        path, text, *lang = self.rows[i]
         audio, _ = librosa.load(path, sr=RATE, mono=True)
-        return {"audio": audio[: 30 * RATE], "text": text}
+        return {"audio": audio[: 30 * RATE], "text": text, "lang": lang[0] if lang else "khmer"}
 
 
 @dataclass
@@ -153,13 +221,19 @@ class Collator:
 
     def __call__(self, batch):
         features = self.processor.feature_extractor([b["audio"] for b in batch], sampling_rate=RATE, return_tensors="pt")
-        labels = self.processor.tokenizer([b["text"] for b in batch], padding=True, return_tensors="pt")
-        ids = labels["input_ids"].masked_fill(labels["attention_mask"].ne(1), -100)
-        # The model adds the start token itself: drop it from the labels when the tokenizer added it.
-        start = self.processor.tokenizer.convert_tokens_to_ids("<|startoftranscript|>")
-        if (ids[:, 0] == start).all():
-            ids = ids[:, 1:]
-        return {"input_features": features["input_features"], "labels": ids}
+        # Each clip's own language tag (Khmer, English...), so Whisper keeps telling languages apart.
+        tok = self.processor.tokenizer
+        start = tok.convert_tokens_to_ids("<|startoftranscript|>")
+        seqs = []
+        for b in batch:
+            tok.set_prefix_tokens(language=b["lang"], task="transcribe")
+            ids = tok(b["text"]).input_ids
+            seqs.append(ids[1:] if ids and ids[0] == start else ids)  # the model adds the start token itself
+        tok.set_prefix_tokens(language="khmer", task="transcribe")
+        labels = torch.full((len(seqs), max(map(len, seqs))), -100, dtype=torch.long)
+        for i, ids in enumerate(seqs):
+            labels[i, : len(ids)] = torch.tensor(ids)
+        return {"input_features": features["input_features"], "labels": labels}
 
 
 @torch.inference_mode()
@@ -178,6 +252,27 @@ def score(model, processor, rows, limit=100):
     return float(np.mean(total)) if total else float("nan")
 
 
+@torch.inference_mode()
+def score_detect(model, processor, rows, limit=60):
+    """With the language left to the model (as in live voice): (average CER, share of clips whose language
+    it got right) on up to `limit` held-out clips of (path, text, language)."""
+    import librosa
+
+    model.eval()
+    dtype = next(model.parameters()).dtype
+    errors, right = [], 0
+    rows = rows[:limit]
+    for path, text, lang in rows:
+        audio, _ = librosa.load(path, sr=RATE, mono=True)
+        feats = processor.feature_extractor(audio[: 30 * RATE], sampling_rate=RATE, return_tensors="pt").input_features.to(model.device, dtype)
+        ids = model.generate(feats, task="transcribe", max_new_tokens=200)
+        tokens = processor.tokenizer.convert_ids_to_tokens(ids[0].tolist())
+        code = {"khmer": "km"}.get(lang, lang)
+        right += f"<|{code}|>" in tokens
+        errors.append(cer(text.lower(), processor.tokenizer.decode(ids[0], skip_special_tokens=True).lower()))
+    return (float(np.mean(errors)) if errors else float("nan")), (right / len(rows) if rows else float("nan"))
+
+
 def main():
     p = argparse.ArgumentParser(description="Fine-tune Virgo's Khmer hearing")
     p.add_argument("--base", default="openai/whisper-large-v3-turbo")
@@ -194,7 +289,17 @@ def main():
     p.add_argument("--lr", type=float, default=1e-4, help="LoRA learning rate (use ~1e-5 with --full)")
     p.add_argument("--full", action="store_true", help="train every weight instead of LoRA (needs more GPU memory)")
     p.add_argument("--push", help="Hugging Face repo to save to, e.g. you/Virgo-1.0-Angkor-Hearing")
+    p.add_argument("--multilingual", action="store_true", help="one model for every language: also train on other languages (--keep)")
+    p.add_argument("--keep", default="en:2500,zh:300,th:300,vi:300,fr:200,ja:200,ko:200",
+                   help="with --multilingual: languages (and clips) to keep, from Google FLEURS")
     args = p.parse_args()
+    if not args.multilingual:  # a hearing already trained on every language stays that way (else it forgets them)
+        sys.path.insert(0, os.path.dirname(__file__))
+        from virgo_speech_marker import multilingual
+
+        if multilingual(args.base):
+            print("ℹ️ The base hears every language: training stays multilingual (--multilingual)")
+            args.multilingual = True
 
     from transformers import Seq2SeqTrainer, Seq2SeqTrainingArguments, WhisperForConditionalGeneration, WhisperProcessor
 
@@ -214,7 +319,15 @@ def main():
     random.Random(42).shuffle(rows)
     held = max(10, min(200, len(rows) // 20))
     evals, train = rows[:held], rows[held:]
-    print(f"✅ {len(train)} training clips, {len(evals)} held out for scoring")
+    others, other_evals = [], []
+    if args.multilingual:
+        others = other_languages(args.work, args.keep)
+        if not any(lang == "en" for *_, lang in others):
+            raise SystemExit("❌ --multilingual needs English clips (FLEURS en_us couldn't be loaded): without them the "
+                             "model forgets English again. Try another `datasets` version, or run without --multilingual.")
+        random.Random(7).shuffle(others)
+        other_evals, others = others[:120], others[120:]
+    print(f"✅ {len(train)} Khmer + {len(others)} other-language training clips, {len(evals)} Khmer held out for scoring")
 
     gpu = torch.cuda.is_available()
     processor = WhisperProcessor.from_pretrained(args.base, language="khmer", task="transcribe")
@@ -224,13 +337,17 @@ def main():
     evals = [r for r in evals if fits(r[1])]
     if len(kept) < len(train):
         print(f"Skipped {len(train) - len(kept)} clips with transcripts too long for Whisper")
-    train = kept
+    train = kept + [r for r in others if fits(r[1])]
+    random.Random(1).shuffle(train)
     model = WhisperForConditionalGeneration.from_pretrained(args.base, dtype=torch.float32)
     model.generation_config.forced_decoder_ids = None
     if gpu:
         model.to("cuda")
     before = score(model, processor, evals)
     print(f"Khmer CER before: {before:.1%}")
+    if other_evals:
+        other_before, lid_before = score_detect(model, processor, other_evals)
+        print(f"Other languages before: CER {other_before:.1%}, language right {lid_before:.0%}")
     # Starting from another Whisper (e.g. a community Khmer fine-tune): the upload must also beat the
     # hearing Virgo has now, scored on the same clips.
     current = float("inf")
@@ -275,14 +392,30 @@ def main():
         model = model.merge_and_unload()
     after = score(model, processor, evals)
     print(f"Khmer CER after: {after:.1%} (before: {before:.1%})")
+    keeps_others = True
+    if other_evals:
+        other_after, lid_after = score_detect(model, processor, other_evals)
+        _, khmer_lid = score_detect(model, processor, [(p, t, "khmer") for p, t in evals])
+        print(f"Other languages after: CER {other_after:.1%} (before {other_before:.1%}), language right {lid_after:.0%} "
+              f"(before {lid_before:.0%}); Khmer recognized as Khmer: {khmer_lid:.0%}")
+        keeps_others = other_after <= other_before * 1.15 + 0.01 and lid_after >= lid_before - 0.05 and khmer_lid >= 0.85
+        if not keeps_others:
+            print("⚠️ Other languages or language detection got too much worse: not uploaded (more --keep clips may help).")
     model.generation_config.forced_decoder_ids = None
     model.save_pretrained(args.out)
     processor.save_pretrained(args.out)
+    if args.multilingual:  # the server uses this one model for every language
+        import json
+
+        with open(os.path.join(args.out, "virgo_hearing.json"), "w", encoding="utf-8") as f:
+            json.dump({"multilingual": True, "languages": ["km"] + sorted({lang for *_, lang in others})}, f)
     with open(os.path.join(args.out, "score.txt"), "w", encoding="utf-8") as f:
         f.write(f"base {args.base}\ncurrent {current:.4f}\nclips {len(train)} train / {len(evals)} held out\nkhmer CER before {before:.4f}\nkhmer CER after {after:.4f}\n")
     print("✅ Saved Virgo's Khmer hearing to", args.out)
     if after > before:
         print("⚠️ It got worse on the held-out clips: don't use this one (try fewer --steps or a lower --lr).")
+    if not keeps_others:
+        args.push = None
     if args.push and after <= before and after > current:
         print(f"⚠️ Not uploaded: the current {args.push} is still better ({current:.1%} vs {after:.1%}).")
     if args.push and after <= before and after <= current:

@@ -5,6 +5,7 @@
 #   bash scripts/train_local.sh hearing                         # all of Whisper, 6000 steps (~2-4 h on a 4090)
 #   bash scripts/train_local.sh hearing --extra <folder>        # plus your own recordings (.wav + metadata.csv)
 #   VIRGO_HEARING_STEPS=3000 bash scripts/train_local.sh hearing
+#   bash scripts/train_local.sh hearing --multilingual          # ONE model for Khmer + English + others (no second Whisper)
 #   VIRGO_HEARING_BASE=metythorn/whisper-large-v3-turbo bash scripts/train_local.sh hearing
 #                                                               # start from another Whisper (e.g. a Khmer fine-tune)
 #
@@ -19,7 +20,13 @@ cd "$CODE"
 ME=$(python -c "from huggingface_hub import HfApi; print(HfApi().whoami()['name'])")
 REPO=$(python scripts/names.py resolve Angkor-1.0-STT 2>/dev/null || echo "$ME/Virgo-1.0-Angkor-Hearing")  # old name until renamed
 BASE=${VIRGO_HEARING_BASE:-}
+# One model for every language (--multilingual): start from OpenAI's Whisper, which hasn't forgotten any.
 [ -n "$BASE" ] || BASE=$(python -c "from huggingface_hub import HfApi; print('$REPO' if HfApi().file_exists('$REPO', 'config.json') else 'openai/whisper-large-v3-turbo')" 2>/dev/null || echo openai/whisper-large-v3-turbo)
+# (a Khmer-only hearing has forgotten the other languages; a multilingual one continues)
+if [[ " $* " == *" --multilingual "* ]] && [ -z "${VIRGO_HEARING_BASE:-}" ] && \
+   ! python -c "import sys; sys.path.insert(0, 'speech'); from virgo_speech_marker import multilingual; sys.exit(0 if multilingual('$BASE') else 1)"; then
+  BASE=openai/whisper-large-v3-turbo
+fi
 LOG="$ROOT/logs/Angkor-1.0-STT-$(date +%Y%m%d-%H%M).log"
 mkdir -p "$ROOT/logs"
 {

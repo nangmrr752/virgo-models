@@ -16,6 +16,11 @@ import numpy as np
 import soundfile as sf
 import torch
 
+try:
+    from virgo_speech_marker import multilingual
+except ImportError:  # imported from elsewhere (speech/ not on the path)
+    from speech.virgo_speech_marker import multilingual
+
 KHMER = re.compile(r"[ក-៿᧠-᧿]")
 # Virgo's Khmer ear: VIRGO_STT_KHMER_MODEL (a folder or a Hugging Face repo, e.g.
 # soknang11/Virgo-1.0-Angkor-Hearing), else the folder the server downloads it to.
@@ -118,6 +123,10 @@ class VirgoSpeech:
             print("Hearing: no Virgo Khmer ear found (", STT_TUNED, "): plain Whisper hears Khmer too")
         self.general_model = None if STT_GENERAL.lower() == "off" else STT_GENERAL
         self._last_language = None  # the language just spoken: a close call leans to it
+        if self.stt_model != STT_BASE and not os.environ.get("VIRGO_STT_GENERAL_MODEL") and multilingual(self.stt_model):
+            # Trained on Khmer AND other languages (finetune_stt.py --multilingual): it hears them all itself.
+            print("Hearing: one model for every language:", self.stt_model)
+            self.general_model = None
         if self.general_model == self.stt_model:
             self.general_model = None  # no Khmer-only model here: the one model does everything
         self._stt = None
@@ -212,7 +221,7 @@ class VirgoSpeech:
         pipe = self._pipeline(general=language not in KHMER_NAMES)
         text = self._decode(pipe, features_for(pipe), language)[0]
         letters = len(re.findall(r"\w", text)) or 1
-        if not chosen and language not in KHMER_NAMES and self.general_model and len(KHMER.findall(text)) > 0.3 * letters:
+        if not chosen and language not in KHMER_NAMES and len(KHMER.findall(text)) > 0.3 * letters:
             # "English" written in Khmer letters: it was Khmer. Virgo's Khmer ear writes it down.
             print(f"Heard: {language} came out in Khmer letters → Khmer", flush=True)
             language = "khmer"
