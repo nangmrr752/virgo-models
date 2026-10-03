@@ -82,7 +82,7 @@ if bayon_only or os.environ.get("SERVE_BAYON", "1") != "0":
         if has_bayon:
             break
     sys.path.append(os.path.join(ROOT, "serve"))
-    from fit import bayon_fits
+    from fit import bayon_fits, model_size
 
     if bayon_only and not has_bayon:
         sys.exit("❌ VIRGO_MAIN=bayon, but there's no Bayon-1.0 on Hugging Face yet (your account or VIRGO_HF_ORG).")
@@ -118,6 +118,13 @@ if True:
         print("Virgo's own hearing not used:", err)
 
 # ---------- 2. Virgo's voice (VoxCPM2 for Khmer, Kokoro for English), in its own environment ----------
+# Bayon 27B alone takes ~18 GB: on one GPU under 40 GB, VoxCPM2 next to it runs the chat itself out of
+# memory mid-answer. Then the voices are Microsoft's (VIRGO_FORCE_VOICE=1 tries anyway).
+big_chat_alone = bayon_only and len(gpus) == 1 and gpus[0].total_memory < 40e9 and model_size(bayon_repo) == 27
+if big_chat_alone and os.environ.get("USE_VIRGO_VOICE", "1") != "0" and os.environ.get("VIRGO_FORCE_VOICE") != "1":
+    print("ℹ️ Bayon-1.0-27B and Virgo's own voice don't both fit this GPU: the Microsoft voices speak.\n"
+          "   For Virgo's own voice, remove VIRGO_MAIN=bayon from .env (Angkor-1.0-12B leaves room for it).")
+    os.environ["USE_VIRGO_VOICE"] = "0"
 if os.environ.get("USE_VIRGO_VOICE", "1") != "0":
     env_dir = os.path.join(WORKSPACE, "vox-env")
     python = os.path.join(env_dir, "bin", "python")
