@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Trains Virgo's live voice (a VoxCPM2 LoRA) on this machine's GPU and uploads it to your private
-# Virgo-Angkor-1.0-TTS repo (standard names: scripts/names.py), next to voice.wav. The server uses it on its next start.
+# Angkor-1.0-TTS repo (standard names: scripts/names.py), next to voice.wav. The server uses it on its next start.
 #
 #   bash scripts/train_local.sh voice                       # steadier Virgo voice (clips made in Virgo's own voice)
 #   bash scripts/train_local.sh voice --recordings <folder> # your own recordings (.wav + metadata.csv)
-#   bash scripts/train_local.sh voice bayon                 # Bayon's own voice (Virgo-Bayon-1.0-TTS), new from a description
-#   bash scripts/train_local.sh voice bakong                # Virgo-Bakong-2.0-TTS: the live voice's own voice
+#   bash scripts/train_local.sh voice bayon                 # Bayon's own voice (Bayon-1.0-TTS), new from a description
+#   bash scripts/train_local.sh voice bakong                # Bakong-2.0-TTS: the live voice's own voice
 #   VIRGO_VOICE_DESCRIBE="A woman, ..." bash scripts/train_local.sh voice bayon   # choose how it sounds
 #
 # Run it when nothing else is training: it needs most of a 24 GB GPU. About 1-2 hours.
@@ -16,9 +16,9 @@ ROOT="$VIRGO_HOME"
 ITERS="${VIRGO_VOICE_STEPS:-1500}"
 cd "$CODE"
 ME=$(python -c "from huggingface_hub import HfApi; print(HfApi().whoami()['name'])")
-# `voice bayon`: Bayon's own voice (Virgo-Bayon-1.0-TTS). `voice bakong`: the live voice's own voice,
-# Virgo-Bakong-{VIRGO_LIVE_VERSION}-TTS (2.0), used for all of Virgo's speech once it exists. Both are
-# made from a description the first time (VIRGO_VOICE_DESCRIBE to choose). Otherwise Virgo-Angkor-1.0-TTS.
+# `voice bayon`: Bayon's own voice (Bayon-1.0-TTS). `voice bakong`: the live voice's own voice,
+# Bakong-{VIRGO_LIVE_VERSION}-TTS (2.0), used for all of Virgo's speech once it exists. Both are
+# made from a description the first time (VIRGO_VOICE_DESCRIBE to choose). Otherwise Angkor-1.0-TTS.
 WHO=angkor; DESIGN=()
 case "${1:-}" in
   bayon) shift; WHO=bayon
@@ -26,7 +26,7 @@ case "${1:-}" in
   bakong) shift; WHO=bakong
     DESIGN=(--design "${VIRGO_VOICE_DESCRIBE:-A young woman, bright and lively, warm clear voice, natural conversational pace}") ;;
 esac
-if [ "$WHO" = bakong ]; then NAME="Virgo-Bakong-${VIRGO_LIVE_VERSION:-2.0}-TTS"; else NAME="Virgo-${WHO^}-1.0-TTS"; fi
+if [ "$WHO" = bakong ]; then NAME="Bakong-${VIRGO_LIVE_VERSION:-2.0}-TTS"; else NAME="${WHO^}-1.0-TTS"; fi
 REPO=$(python scripts/names.py resolve "$NAME" 2>/dev/null || echo "$ME/$NAME")  # the old name until renamed
 WORK="$ROOT/voice-train"; [ "$WHO" != angkor ] && WORK="$ROOT/voice-train-$WHO"
 # Virgo-Bakong: the cleanest voice. Twice the clips, made with more VoxCPM2 steps, each one checked by
@@ -34,7 +34,7 @@ WORK="$ROOT/voice-train"; [ "$WHO" != angkor ] && WORK="$ROOT/voice-train-$WHO"
 # training. VIRGO_VOICE_STEPS changes the training length.
 QUALITY=()
 if [ "$WHO" = bakong ]; then
-  HEARING=$(python -c "import sys; sys.path.insert(0, 'scripts'); from names import resolve; from huggingface_hub import HfApi; r = resolve('Virgo-Angkor-1.0-STT'); print(r if HfApi().file_exists(r, 'config.json') else 'openai/whisper-large-v3-turbo')" 2>/dev/null || echo openai/whisper-large-v3-turbo)
+  HEARING=$(python -c "import sys; sys.path.insert(0, 'scripts'); from names import resolve; from huggingface_hub import HfApi; r = resolve('Angkor-1.0-STT', need_file='config.json'); print(r if HfApi().file_exists(r, 'config.json') else 'openai/whisper-large-v3-turbo')" 2>/dev/null || echo openai/whisper-large-v3-turbo)
   QUALITY=(--count 1200 --steps 16 --design-tries 8 --check "$HEARING")
   ITERS="${VIRGO_VOICE_STEPS:-3000}"
 fi
