@@ -96,6 +96,14 @@ def split_languages(text):
 
 
 # What Whisper writes for noise or silence (from its training on subtitled videos).
+def looping(text):
+    """True when Whisper got stuck repeating (ប្រារារារា…, "the the the…"): the text squeezes very small."""
+    import zlib
+
+    raw = re.sub(r"\s+", "", text).encode("utf-8")
+    return len(raw) > 40 and len(raw) / max(1, len(zlib.compress(raw))) > 3.0
+
+
 # Only phrases nobody says to an assistant: a real "thank you" or "អរគុណ" must still be heard.
 HALLUCINATIONS = {"thank you for watching", "thanks for watching", "please like and subscribe"}
 
@@ -173,7 +181,10 @@ class VirgoSpeech:
                 # quickly or with a Khmer accent is often half-taken for Khmer).
                 language, sure = WHISPER_NAMES.get(self._runner_up, self._runner_up), 1 - sure
             raw = next((c for c, n in WHISPER_NAMES.items() if n == language), language)
-            lookalike = raw in LOOKALIKES  # Vietnamese, Lao, Thai...: what Khmer is mistaken for
+            # Believed outright only when common and clearly unlike Khmer (VIRGO_STT_TRUSTED); Khmer is
+            # often taken for Vietnamese, Lao, Thai, Indonesian, Portuguese... which get the two-ear check.
+            trusted = {c.strip() for c in os.environ.get("VIRGO_STT_TRUSTED", "en,zh,ja,ko,fr,de,ru").split(",") if c.strip()}
+            lookalike = raw not in trusted
             trust = float(os.environ.get("VIRGO_STT_TRUST", "0.5"))
             if language and language not in KHMER_NAMES and not lookalike and sure >= trust:
                 # English (or another language that doesn't sound like Khmer) and Whisper is fairly sure:
@@ -200,6 +211,12 @@ class VirgoSpeech:
                 return self._clean(text)
         pipe = self._pipeline(general=language not in KHMER_NAMES)
         text = self._decode(pipe, features_for(pipe), language)[0]
+        letters = len(re.findall(r"\w", text)) or 1
+        if not chosen and language not in KHMER_NAMES and self.general_model and len(KHMER.findall(text)) > 0.3 * letters:
+            # "English" written in Khmer letters: it was Khmer. Virgo's Khmer ear writes it down.
+            print(f"Heard: {language} came out in Khmer letters → Khmer", flush=True)
+            language = "khmer"
+            text = self._decode(self._pipeline(), features_for(self._pipeline()), "khmer")[0]
         if not chosen:
             self._last_language = language
             print(f"Heard [{language}, sure {sure:.2f}]: {text[:80]}", flush=True)
@@ -207,7 +224,7 @@ class VirgoSpeech:
             print(f"Heard [{language}, chosen by the page]: {text[:80]}", flush=True)
         return self._clean(text)
 
-    def _decode(self, pipe, features, language):
+    def _decode(self, pipe, features, language, retry=False):
         """(text, confidence): the average log-probability per word piece, higher is surer."""
         model = pipe.model
         kwargs = {"language": language, "task": "transcribe"} if language else {}
@@ -215,10 +232,15 @@ class VirgoSpeech:
         beams = int(os.environ.get("VIRGO_STT_BEAMS", "5"))
         if beams > 1:
             kwargs["num_beams"] = beams
+        if retry:
+            kwargs.update(no_repeat_ngram_size=3, repetition_penalty=1.3)
         # Virgo's own words (names it should spell right), given to Whisper as earlier "speech".
         words = os.environ.get("VIRGO_STT_WORDS", STT_WORDS).strip()
-        if language not in (None, "khmer", "english", "km", "en"):
-            words = ""  # Virgo's word list is Khmer and English: it would only confuse other languages
+        if language not in (None, "khmer", "km"):
+            # Khmer words pull other languages into Khmer letters (and loops): Latin-script names only,
+            # and only for English.
+            words = ", ".join(w.strip() for w in words.rstrip(".").split(",") if w.strip() and not KHMER.search(w)) \
+                if language in ("english", "en") else ""
         if words:
             try:
                 kwargs["prompt_ids"] = pipe.tokenizer.get_prompt_ids(words, return_tensors="pt").to(model.device)
@@ -229,6 +251,10 @@ class VirgoSpeech:
         text = pipe.tokenizer.batch_decode(ids, skip_special_tokens=True)[0].strip()
         if words and text.startswith(words):  # older transformers keep the prompt in the output
             text = text[len(words):].strip()
+        if looping(text) and not retry:  # Whisper stuck repeating (ភ្ម្ម្ម…): once more, repeats blocked
+            return self._decode(pipe, features, language, retry=True)
+        if looping(text):
+            return "", -99.0
         score = -99.0
         try:
             if getattr(out, "sequences_scores", None) is not None:  # beam search: already per word piece
