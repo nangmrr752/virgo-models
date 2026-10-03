@@ -91,7 +91,15 @@ KM_CURRENT = re.compile(r"(ថ្ងៃនេះ|ឥឡូវ|បច្ចុប
 UNSURE = re.compile(r"turn on \**search|i (don't|do not) know (live|the latest|today)|i can'?t (see|check) (live|today|the latest|current)|(don't|do not|can't|cannot) (have |access )?(real[- ]time|current|live|up[- ]to[- ]date)|បើក \**Search|ខ្ញុំមិនអាចមើល|ខ្ញុំមិនដឹង(លទ្ធផល|ព័ត៌មាន)ផ្ទាល់", re.I)
 
 
+# Date and calendar questions ("what's the date today?", "ថ្ងៃនេះថ្ងៃទីប៉ុន្មាន?"): the calendar facts in the
+# instructions answer them, so no web search (which finds nothing useful for them anyway).
+ABOUT_DATE = re.compile(r"\b(what('?s| is)? (the )?(day|date)|which day|date today|today'?s date|what year|lunar|holiday|calendar|khmer new year|pchum ben|water festival|songkran)\b|ថ្ងៃទី|ថ្ងៃអ្វី|ថ្ងៃអី|ខែអ្វី|ខែអី|ឆ្នាំអ្វី|ឆ្នាំអី|ចន្ទគតិ|ច័ន្ទគតិ|កើត|រោច|បុណ្យ|ចូលឆ្នាំ|ថ្ងៃឈប់", re.I)
+NEWSY = re.compile(r"\b(news|price|cost|rate|weather|forecast|score|won|winner|stock|election|trending|open now)\b|ព័ត៌មាន|តម្លៃ|អាកាសធាតុ|អត្រា|ពិន្ទុ|ឈ្នះ", re.I)
+
+
 def wants_search(question):
+    if ABOUT_DATE.search(question) and not NEWSY.search(question):
+        return False
     return bool(CURRENT.search(question) or KM_CURRENT.search(question))
 
 
