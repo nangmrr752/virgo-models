@@ -103,7 +103,9 @@ def web_search(query):
         return None
     try:
         req = urllib.request.Request(SEARCH_URL, method="POST", data=json.dumps({"query": query[:300]}).encode(),
-                                     headers={"content-type": "application/json", "authorization": f"Bearer {key}"})
+                                     headers={"content-type": "application/json", "authorization": f"Bearer {key}",
+                                              # Cloudflare refuses Python's default "Python-urllib" (403)
+                                              "user-agent": "Virgo-Server/1.0 (+https://virgoai.camksn.com)"})
         body = json.loads(urllib.request.urlopen(req, timeout=15).read())
     except Exception as err:
         print("Virgo realtime search failed:", repr(err))
