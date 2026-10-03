@@ -231,6 +231,23 @@ def main():
         model.to("cuda")
     before = score(model, processor, evals)
     print(f"Khmer CER before: {before:.1%}")
+    # Starting from another Whisper (e.g. a community Khmer fine-tune): the upload must also beat the
+    # hearing Virgo has now, scored on the same clips.
+    current = float("inf")
+    if args.push and args.push != args.base:
+        try:
+            from huggingface_hub import HfApi
+
+            if HfApi().file_exists(args.push, "config.json"):
+                old_model = WhisperForConditionalGeneration.from_pretrained(args.push, dtype=torch.float32)
+                old_model.generation_config.forced_decoder_ids = None
+                current = score(old_model.to("cuda") if gpu else old_model, processor, evals)
+                print(f"Khmer CER of the current {args.push}: {current:.1%}")
+                del old_model
+                if gpu:
+                    torch.cuda.empty_cache()
+        except Exception as err:
+            print("Couldn't score the current hearing:", err)
 
     if not args.full:
         from peft import LoraConfig, get_peft_model
@@ -262,11 +279,13 @@ def main():
     model.save_pretrained(args.out)
     processor.save_pretrained(args.out)
     with open(os.path.join(args.out, "score.txt"), "w", encoding="utf-8") as f:
-        f.write(f"base {args.base}\nclips {len(train)} train / {len(evals)} held out\nkhmer CER before {before:.4f}\nkhmer CER after {after:.4f}\n")
+        f.write(f"base {args.base}\ncurrent {current:.4f}\nclips {len(train)} train / {len(evals)} held out\nkhmer CER before {before:.4f}\nkhmer CER after {after:.4f}\n")
     print("✅ Saved Virgo's Khmer hearing to", args.out)
     if after > before:
         print("⚠️ It got worse on the held-out clips: don't use this one (try fewer --steps or a lower --lr).")
-    if args.push and after <= before:
+    if args.push and after <= before and after > current:
+        print(f"⚠️ Not uploaded: the current {args.push} is still better ({current:.1%} vs {after:.1%}).")
+    if args.push and after <= before and after <= current:
         from huggingface_hub import HfApi
 
         api = HfApi()
