@@ -28,6 +28,8 @@ def load_pairs(pattern, tok, gemma):
             if not line.strip():
                 continue
             row = json.loads(line)
+            if not all(k in row for k in ("prompt", "chosen", "rejected")):  # e.g. student_failed.jsonl: not a pair
+                continue
             msgs = row["prompt"]
             if gemma and msgs and msgs[0]["role"] == "system":  # Gemma has no system role: fold it in
                 msgs = [{**msgs[1], "content": f"{msgs[0]['content']}\n\n{msgs[1]['content']}"}] + msgs[2:]

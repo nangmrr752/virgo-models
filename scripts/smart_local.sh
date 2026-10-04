@@ -83,7 +83,7 @@ dpo() {
   # The trained (SFT) model: this machine's copy, else the one on Hugging Face.
   [ -f "$out/adapter_config.json" ] || python -c "from huggingface_hub import snapshot_download as s; s('$repo', local_dir='$out')" >/dev/null
   local extra=""; [ "$size" = 27b ] && extra="--max-len 512"  # 27B in 4 bits fills most of a 24 GB GPU
-  echo "== DPO for $name on $(cat chat/dpo/*.jsonl | wc -l) pairs =="
+  echo "== DPO for $name on $(cat chat/dpo/*.jsonl | grep -c '"chosen"') pairs =="
   python -u chat/evaluate.py --questions chat/eval/hard.jsonl --adapter "$out" --report "$ROOT/logs/$name-hard-before.json" | tail -15
   PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python -u chat/train_dpo.py --adapter "$out" --out "$out-dpo" $extra
   python -u chat/evaluate.py --questions chat/eval/hard.jsonl --adapter "$out-dpo" --report "$ROOT/logs/$name-hard-after.json" \
