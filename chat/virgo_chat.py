@@ -22,6 +22,8 @@ def system_for(name):
 
 DEFAULT_BASE = "google/gemma-3-4b-it"
 BIG = re.compile(r"(\d+)b", re.I)
+# A message in plain English: Latin letters, digits, punctuation and emoji, no other script.
+ENGLISH = re.compile(r"[\x00-\x7f\u2000-\u206f\u2190-\u2bff\U0001f000-\U0001faff\u00a0-\u00bf]*")
 
 
 def adapter_base(adapter):
@@ -105,6 +107,10 @@ class VirgoChat:
                 msgs.append({"role": m["role"], "content": content})
         while msgs and msgs[0]["role"] != "user":
             msgs.pop(0)
+        # Virgo learned mostly from Khmer, and on Cambodian topics ("a trip to Siem Reap") it can drift into
+        # Khmer when asked in English: a reminder right next to an English question keeps the answer English.
+        if msgs and msgs[-1]["role"] == "user" and ENGLISH.fullmatch(msgs[-1]["content"]) and re.search(r"[A-Za-z]{3}", msgs[-1]["content"]):
+            msgs[-1] = {**msgs[-1], "content": f"{msgs[-1]['content']}\n\n(Reply in English, unless I asked for another language.)"}
         if self.gemma and msgs:  # Gemma has no system role
             msgs = [{**msgs[0], "content": f"{system}\n\n{msgs[0]['content']}"}] + msgs[1:]
         else:
