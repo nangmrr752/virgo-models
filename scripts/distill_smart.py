@@ -219,24 +219,46 @@ LANG_QUESTIONS = {
 }
 
 
+# English questions about Cambodia: answered in English (Virgo tended to drift into Khmer on them).
+CAMBODIA_EN = ["Plan a weekend trip to {p}.", "What should I see in {p}?", "Tell me about {p} in three sentences.",
+               "What food is {p} famous for?", "How do I get from Phnom Penh to {p}?", "Give me 3 tips for visiting {p}."]
+PLACES = ["Siem Reap", "Angkor Wat", "Kampot", "Kep", "Battambang", "Koh Rong", "Mondulkiri", "Phnom Penh", "Sihanoukville", "Kratie"]
+
+
 def language_task(r):
+    if r.random() < 0.3:
+        return ({"q": r.choice(CAMBODIA_EN).format(p=r.choice(PLACES)), "lang": "en"},)
     lang = r.choice(list(LANG_QUESTIONS))
     q = r.choice(LANG_QUESTIONS[lang]).format(t=r.choice(TOPICS_EN))
     return ({"q": q, "lang": lang},)
 
 
+MIX = {"math": 0.4, "logic": 0.25, "instructions": 0.25, "languages": 0.1}
+
+
+def set_mix(text):
+    """--mix "math=0.25,logic=0.35,instructions=0.15,languages=0.25" (any order; normalized)."""
+    weights = {k: float(v) for k, v in (x.split("=") for x in text.split(",") if x.strip())}
+    unknown = set(weights) - set(MIX)
+    if unknown:
+        raise SystemExit(f"Unknown task kinds in --mix: {', '.join(unknown)} (use {', '.join(MIX)})")
+    total = sum(weights.values()) or 1
+    MIX.update({k: weights.get(k, 0) / total for k in MIX})
+
+
 def make_tasks(r, n):
     """n tasks in the grader's format, with a "kind" and whether to ask for steps."""
     tasks = []
+    edges = [MIX["math"], MIX["math"] + MIX["logic"], MIX["math"] + MIX["logic"] + MIX["instructions"]]
     while len(tasks) < n:
         pick = r.random()
-        if pick < 0.4:
+        if pick < edges[0]:
             en, kmq, ans = math_task(r)
             pair = ({"q": en, "lang": "en", "number": ans, "last": True}, {"q": kmq, "lang": "km", "number": ans, "last": True})
             kind = "math"
-        elif pick < 0.65:
+        elif pick < edges[1]:
             pair, kind = logic_task(r), "logic"
-        elif pick < 0.9:
+        elif pick < edges[2]:
             pair, kind = instruction_task(r), "instructions"
         else:
             pair, kind = language_task(r), "languages"
@@ -298,7 +320,10 @@ def main():
     p.add_argument("--hf-repo", help="private Hugging Face dataset to save both files to as they grow")
     p.add_argument("--upload-every", type=int, default=300)
     p.add_argument("--hours", type=float, default=0, help="stop (and save) after this many hours, e.g. 11 on Kaggle's 12-hour limit")
+    p.add_argument("--mix", default="", help='share of each task kind, e.g. "math=0.25,logic=0.35,instructions=0.15,languages=0.25"')
     args = p.parse_args()
+    if args.mix:
+        set_mix(args.mix)
     os.makedirs(os.path.dirname(args.pairs), exist_ok=True)
 
     # Never train on the test questions.

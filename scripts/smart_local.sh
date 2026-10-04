@@ -3,6 +3,7 @@
 # needs the whole GPU). Called by train_local.sh:
 #
 #   bash scripts/train_local.sh distill [N]        # Bayon-1.0-27B answers N checked problems (default 12000, ~1 day)
+#   bash scripts/train_local.sh mistakes [N]       # Angkor tries N problems (default 6000); Bayon answers the ones it got wrong
 #   bash scripts/train_local.sh dpo angkor 12b     # DPO on the good/bad pairs; uploads only if the hard test improves
 #   bash scripts/train_local.sh all                # distill → Angkor 12B → DPO → Bayon 27B → DPO → hearing
 #
@@ -47,6 +48,23 @@ distill() {
     --adapter "$adapter" --target "$target" --hf-repo "$DATA_REPO"
 }
 
+mistakes() {  # DPO pairs from Angkor's own mistakes (scripts/student_pairs.py)
+  local tasks="${1:-6000}" student="$ROOT/out/Angkor-1.0-12B" teacher_dir="$ROOT/out/teacher-Bayon-1.0-27B" repo bayon adapter=""
+  need_gpu_free
+  fetch student_pairs.jsonl chat/dpo
+  repo=$(python scripts/names.py resolve Angkor-1.0-12B 2>/dev/null || echo "$ME/Angkor-1.0-12B")
+  [ -f "$student/adapter_config.json" ] || python -c "from huggingface_hub import snapshot_download as s; s('$repo', local_dir='$student')" >/dev/null
+  echo "== Angkor tries $tasks problems =="
+  PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python -u scripts/student_pairs.py --stage student --adapter "$student" --tasks "$tasks"
+  bayon=$(python scripts/names.py resolve Bayon-1.0-27B 2>/dev/null || true)
+  if [ -n "$bayon" ] && python -c "from huggingface_hub import HfApi; import sys; sys.exit(0 if HfApi().file_exists('$bayon', 'adapter_config.json') else 1)" 2>/dev/null; then
+    [ -f "$teacher_dir/adapter_config.json" ] || python -c "from huggingface_hub import snapshot_download as s; s('$bayon', local_dir='$teacher_dir')" >/dev/null
+    adapter="$teacher_dir"
+  fi
+  echo "== The teacher answers what Angkor got wrong (teacher: ${bayon:-google/gemma-3-27b-it}) =="
+  PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python -u scripts/student_pairs.py --stage teacher --adapter "$adapter" --hf-repo "$DATA_REPO"
+}
+
 name_for() {  # name_for angkor 12b → Angkor-1.0-12B
   echo "${1^}-1.0-${2^^}"
 }
@@ -59,6 +77,7 @@ dpo() {
   python -c "import trl" 2>/dev/null || python -m pip install -q "trl>=0.12"
   fetch smart_pairs.jsonl chat/dpo
   fetch smart_pairs_kaggle.jsonl chat/dpo  # made on Kaggle (chat/distill_kaggle.ipynb)
+  fetch student_pairs.jsonl chat/dpo  # from Angkor's own mistakes (train_local.sh mistakes)
   cat chat/dpo/*.jsonl > /dev/null 2>&1 && [ -n "$(cat chat/dpo/*.jsonl 2>/dev/null | head -1)" ] || { echo "❌ No DPO pairs yet: run bash scripts/train_local.sh distill first"; exit 1; }
   repo=$(python scripts/names.py resolve "$name" 2>/dev/null || echo "$ME/$name")
   # The trained (SFT) model: this machine's copy, else the one on Hugging Face.
@@ -97,6 +116,7 @@ run_logged() {  # run_logged <name> <command...>
 
 case "$STEP" in
   distill) run_logged distill distill "$@" ;;
+  mistakes) run_logged mistakes mistakes "$@" ;;
   dpo) run_logged "dpo-${1:-angkor}-${2:-12b}" dpo "$@" ;;
   all)
     # Each step continues where it left off, so running "all" again skips work already done.
@@ -108,5 +128,5 @@ case "$STEP" in
     run_logged hearing bash scripts/train_local.sh hearing
     echo "✅ All done. Start Virgo again (docker compose up -d --build) and score it: bash scripts/train_local.sh score"
     ;;
-  *) echo "Use: distill [N] | dpo angkor 12b | all"; exit 1 ;;
+  *) echo "Use: distill [N] | mistakes [N] | dpo angkor 12b | all"; exit 1 ;;
 esac

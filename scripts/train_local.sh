@@ -24,6 +24,7 @@ ROOT="$VIRGO_HOME"
 [ "${1:-}" = score ] && { shift; exec bash "$CODE/scripts/score_server.sh" "$@"; }  # score the running server
 [ "${1:-}" = hearing ] && { shift; exec bash "$CODE/scripts/train_hearing_local.sh" "$@"; }  # Virgo's hearing (Whisper)
 [ "${1:-}" = distill ] && { shift; exec bash "$CODE/scripts/smart_local.sh" distill "$@"; }  # checked examples + DPO pairs
+[ "${1:-}" = mistakes ] && { shift; exec bash "$CODE/scripts/smart_local.sh" mistakes "$@"; }  # DPO pairs from Angkor's own mistakes
 [ "${1:-}" = dpo ] && { shift; exec bash "$CODE/scripts/smart_local.sh" dpo "$@"; }
 [ "${1:-}" = all ] && { shift; exec bash "$CODE/scripts/smart_local.sh" all "$@"; }
 WHICH="${1:-bayon}"; DEFAULT_SIZE=12b; [ "$WHICH" = bayon ] && DEFAULT_SIZE=27b

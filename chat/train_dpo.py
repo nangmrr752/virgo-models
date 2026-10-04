@@ -5,8 +5,8 @@ pairs scripts/distill_smart.py saves (chat/dpo/*.jsonl).
     python chat/train_dpo.py --adapter <data>/out/Angkor-1.0-12B --out <data>/out/Angkor-1.0-12B-dpo
 
 It starts from the model's own trained adapter (SFT) and keeps a frozen copy of it as the reference, so
-the model only moves toward the better answers and doesn't forget the rest. One epoch, small learning
-rate. Pair format: {"prompt": [messages], "chosen": "...", "rejected": "..."}.
+the model only moves toward the better answers and doesn't forget the rest. Three epochs at 2e-5
+(what worked in round 2). Pair format: {"prompt": [messages], "chosen": "...", "rejected": "..."}.
 """
 import argparse
 import glob
@@ -45,8 +45,8 @@ def main():
     p.add_argument("--pairs", default="chat/dpo/*.jsonl")
     p.add_argument("--out", required=True)
     p.add_argument("--beta", type=float, default=0.1, help="how far it may move from the SFT model (lower = further)")
-    p.add_argument("--lr", type=float, default=5e-6)
-    p.add_argument("--epochs", type=float, default=1)
+    p.add_argument("--lr", type=float, default=2e-5)  # round 2: 5e-6 barely moved the model, 2e-5 x 3 epochs gave +1.3 points
+    p.add_argument("--epochs", type=float, default=3)
     p.add_argument("--max-len", type=int, default=1024)
     args = p.parse_args()
 
