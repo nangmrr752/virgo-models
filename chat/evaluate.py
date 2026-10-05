@@ -125,7 +125,7 @@ def main():
         import urllib.request
 
         sys.path.append(os.path.dirname(__file__))
-        from virgo_chat import system_for
+        from llama_chat import system_for  # the instructions the llama.cpp models run with (Angkor-2.0)
 
         system = system_for(None)
 
