@@ -44,14 +44,15 @@ services:
     # Virgo's switcher (docker/llama_router.py): Angkor-2.0 normally; Bayon-2.0 (VIRGO_BAYON_MODEL, e.g. Gemma 4
     # 31B) loads when someone picks Bayon and Angkor comes back after VIRGO_BAYON_IDLE seconds without Bayon.
     # --reasoning-budget 0: answers without thinking first (fast, and Khmer answers aren't used up by thinking).
+    # --no-mmproj: text only (Gemma 4's image part would take ~1 GB more; images go elsewhere).
     # No -ngl: llama.cpp fits each model into the GPU memory left after Virgo's voice and ears (the rest in RAM).
     entrypoint: ["python3", "/app/llama_router.py"]
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
       ANGKOR_MODEL: ${VIRGO_LLAMA_MODEL:-unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_XL}
-      ANGKOR_ARGS: -c ${VIRGO_LLAMA_CTX:-8192} --jinja --reasoning-budget ${VIRGO_LLAMA_REASONING_BUDGET:-0} ${VIRGO_LLAMA_ARGS:-}
+      ANGKOR_ARGS: -c ${VIRGO_LLAMA_CTX:-8192} --jinja --no-mmproj --reasoning-budget ${VIRGO_LLAMA_REASONING_BUDGET:-0} ${VIRGO_LLAMA_ARGS:-}
       BAYON_MODEL: ${VIRGO_BAYON_MODEL:-}
-      BAYON_ARGS: -c ${VIRGO_BAYON_CTX:-8192} --jinja --reasoning-budget ${VIRGO_BAYON_REASONING_BUDGET:-0} ${VIRGO_BAYON_ARGS:-}
+      BAYON_ARGS: -c ${VIRGO_BAYON_CTX:-8192} --jinja --no-mmproj --reasoning-budget ${VIRGO_BAYON_REASONING_BUDGET:-0} ${VIRGO_BAYON_ARGS:-}
       BAYON_IDLE: ${VIRGO_BAYON_IDLE:-600}
     # Start after Virgo has loaded its voice and ears, so they always get their GPU memory first.
     depends_on:

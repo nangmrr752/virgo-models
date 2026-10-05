@@ -96,6 +96,7 @@ basetest() {  # basetest google/gemma-4-31b-it: an untrained base model on the b
 
 basetest_gguf() {  # basetest-gguf <repo>[:quant]: a GGUF base in llama.cpp (GPU) on the big hard test, nothing uploaded
   # For models our 4-bit loader can't fit, e.g. the Gemma 4 26B A4B MoE in Google's QAT 4-bit: about 15 GB.
+  # Text only (--no-mmproj: Gemma 4's image part isn't loaded); llama.cpp fits the model into free GPU memory.
   local spec="${1:?a GGUF on Hugging Face, e.g. unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_XL}" tag port=8089 image
   image="${VIRGO_LLAMA_IMAGE:-}"
   if [ -z "$image" ]; then
@@ -120,7 +121,7 @@ basetest_gguf() {  # basetest-gguf <repo>[:quant]: a GGUF base in llama.cpp (GPU
   echo "== llama.cpp: $spec (the first run downloads it into $ROOT/llama-cache) =="
   docker run -d --name virgo-llama --gpus all -p 127.0.0.1:$port:8080 -v "$ROOT/llama-cache:/root/.cache/llama.cpp" -v "$HF_HOME:/root/.cache/huggingface" \
     -e HF_TOKEN="$(python -c 'from huggingface_hub import get_token; print(get_token() or "")')" \
-    "$image" -hf "$spec" -ngl 999 -c 8192 --jinja --host 0.0.0.0 --port 8080 >/dev/null
+    "$image" -hf "$spec" --no-mmproj -c 8192 --jinja --host 0.0.0.0 --port 8080 ${VIRGO_LLAMA_TEST_ARGS:-} >/dev/null
   echo -n "Waiting for the model to download and load"
   for _ in $(seq 1 720); do  # up to 2 hours (a first download is ~15 GB)
     curl -sf "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break
