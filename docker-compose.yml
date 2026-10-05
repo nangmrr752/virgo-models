@@ -22,8 +22,14 @@ services:
     shm_size: "8gb"
     ports:
       - "127.0.0.1:${VIRGO_PORT:-8088}:8000"   # only this machine; the tunnel reaches it at http://127.0.0.1:8088
+    healthcheck:   # up once the voice and ears are loaded (the llama service waits for this)
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8000/v1/models"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 1800s
 
-  # Angkor-2.0 (Gemma 4 26B A4B, 4-bit GGUF, ~15 GB) through llama.cpp. Off unless .env has
+  # Angkor-2.0 (Gemma 4 26B A4B, 4-bit GGUF, ~16 GB; what doesn't fit on the GPU stays in RAM) through llama.cpp. Off unless .env has
   #   COMPOSE_PROFILES=llama
   #   VIRGO_LLAMA_URL=http://llama:8080
   # The first start downloads the model (~15 GB) into ${VIRGO_LLAMA_CACHE:-/opt/virgo/llama-cache}.
@@ -37,9 +43,14 @@ services:
     restart: unless-stopped
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
+    # No -ngl: llama.cpp fits the model into the GPU memory left after Virgo's voice and ears, keeping the
+    # rest (some MoE experts) in RAM. More flags with VIRGO_LLAMA_ARGS (e.g. "-ngl 999" when the GPU is free).
     command: >-
       -hf ${VIRGO_LLAMA_MODEL:-unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_XL}
-      -ngl 999 -c ${VIRGO_LLAMA_CTX:-8192} --jinja --host 0.0.0.0 --port 8080
+      -c ${VIRGO_LLAMA_CTX:-8192} --jinja --host 0.0.0.0 --port 8080 ${VIRGO_LLAMA_ARGS:-}
+    # Start after Virgo has loaded its voice and ears, so they always get their GPU memory first.
+    depends_on:
+      virgo: { condition: service_healthy }
     volumes:
       - ${VIRGO_LLAMA_CACHE:-/opt/virgo/llama-cache}:/root/.cache/llama.cpp
     deploy:
