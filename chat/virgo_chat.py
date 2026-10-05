@@ -42,6 +42,33 @@ def full_model(folder):
         and os.path.exists(os.path.join(folder, "config.json"))
 
 
+def load_causal(name, **kwargs):
+    """A chat model by name. Gemma 3 (4B and up) and Gemma 4 are image+text models: they load with the
+    image-text class when the text-only one refuses them."""
+    from transformers import AutoModelForCausalLM
+
+    try:
+        return AutoModelForCausalLM.from_pretrained(name, **kwargs)
+    except ValueError as err:
+        first = err
+    try:
+        from transformers import AutoModelForImageTextToText
+
+        return AutoModelForImageTextToText.from_pretrained(name, **kwargs)
+    except (ImportError, ValueError):
+        pass
+    try:
+        from transformers import Gemma3ForConditionalGeneration
+
+        return Gemma3ForConditionalGeneration.from_pretrained(name, **kwargs)
+    except ValueError:
+        pass
+    if "does not recognize this architecture" in str(first) or "model type" in str(first):
+        raise SystemExit(f"❌ This transformers ({__import__('transformers').__version__}) doesn't know {name} yet "
+                         "(newer models like Gemma 4 need a newer one): python -m pip install -U transformers peft") from first
+    raise first
+
+
 def wants_4bit(base):
     """12B and bigger load in 4 bits on a GPU, so Angkor-1.0-12B fits a free 16 GB T4."""
     flag = os.environ.get("VIRGO_4BIT")
@@ -76,12 +103,7 @@ class VirgoChat:
             kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=dtype)
             kwargs["device_map"] = {"": gpu}
-        try:
-            model = AutoModelForCausalLM.from_pretrained(base, **kwargs)
-        except ValueError:  # Gemma 3 4B and up are image+text models
-            from transformers import Gemma3ForConditionalGeneration
-
-            model = Gemma3ForConditionalGeneration.from_pretrained(base, **kwargs)
+        model = load_causal(base, **kwargs)
         if adapter:
             from peft import PeftModel
 
