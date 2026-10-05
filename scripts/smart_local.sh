@@ -97,7 +97,22 @@ basetest() {  # basetest google/gemma-4-31b-it: an untrained base model on the b
 basetest_gguf() {  # basetest-gguf <repo>[:quant]: a GGUF base in llama.cpp (GPU) on the big hard test, nothing uploaded
   # For models our 4-bit loader can't fit, e.g. the Gemma 4 26B A4B MoE in Google's QAT 4-bit: about 15 GB.
   local spec="${1:?a GGUF on Hugging Face, e.g. unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_XL}" tag port=8089 image
-  image="${VIRGO_LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}"
+  image="${VIRGO_LLAMA_IMAGE:-}"
+  if [ -z "$image" ]; then
+    # The official image needs CUDA 12.8 (driver 570+); for an older driver, llama.cpp is built for its CUDA once.
+    local cuda
+    cuda=$(nvidia-smi | grep -oP 'CUDA Version: \K[0-9]+\.[0-9]+' | head -1)
+    if python -c "import sys; sys.exit(0 if tuple(map(int, '${cuda:-0.0}'.split('.'))) >= (12, 8) else 1)"; then
+      image=ghcr.io/ggml-org/llama.cpp:server-cuda
+    else
+      local base=12.2.2; python -c "import sys; sys.exit(0 if tuple(map(int, '${cuda:-0.0}'.split('.'))) >= (12, 4) else 1)" && base=12.4.1
+      image="virgo-llama:cuda${base%.*}"
+      if ! docker image inspect "$image" >/dev/null 2>&1; then
+        echo "== Building llama.cpp for this driver's CUDA $cuda (once, ~10-20 min) =="
+        docker build -f "$CODE/docker/llama-cuda.Dockerfile" --build-arg CUDA="$base" -t "$image" "$CODE/docker"
+      fi
+    fi
+  fi
   tag=$(echo "$spec" | tr '/:' '__')
   need_gpu_free
   mkdir -p "$ROOT/llama-cache"
