@@ -17,6 +17,7 @@ chat/eval are never used, so the test stays fair. Both files are saved to your H
 (Data-1.0) as they grow, and a stopped run continues where it left off.
 """
 import argparse
+import glob
 import json
 import os
 import random
@@ -328,7 +329,7 @@ def main():
 
     # Never train on the test questions.
     blocked = set()
-    for path in ("chat/eval/questions.jsonl", "chat/eval/hard.jsonl"):
+    for path in sorted(glob.glob(os.path.join(HERE, "..", "chat", "eval", "*.jsonl"))):  # every test set
         if os.path.exists(path):
             blocked |= {norm(json.loads(l)["q"]) for l in open(path, encoding="utf-8") if l.strip()}
     seen = set(blocked)

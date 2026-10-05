@@ -17,7 +17,9 @@ Each question in chat/eval/questions.jsonl says what a good answer needs:
   last       with number: the answer's LAST number must be it (its final result, not a step)
   lines      exactly this many non-empty lines (lists, poems)
   source     a text to summarize: the answer must be shorter and not copy it
-Matching ignores case and accents (Tonlé = Tonle). chat/eval/hard.jsonl is the harder set.
+Matching ignores case and accents (Tonlé = Tonle). chat/eval/hard.jsonl is the harder set, and with
+chat/eval/hard2.jsonl (--questions chat/eval/hard.jsonl,chat/eval/hard2.jsonl) the big hard test that
+decides uploads.
 The score is the share of checks passed, overall and per skill (identity, language, facts, math,
 honesty, safety, style, support). Results are saved to chat/eval/report.json.
 """
@@ -106,8 +108,10 @@ def main():
     p.add_argument("--compare", help="an earlier report.json: show which skills got better or worse")
     args = p.parse_args()
 
-    with open(args.questions, encoding="utf-8") as f:
-        items = [json.loads(line) for line in f if line.strip()]
+    items = []
+    for path in args.questions.split(","):  # several sets: chat/eval/hard.jsonl,chat/eval/hard2.jsonl
+        with open(path.strip(), encoding="utf-8") as f:
+            items += [json.loads(line) for line in f if line.strip()]
     if args.answers:
         with open(args.answers, encoding="utf-8") as f:
             saved = {row["q"]: row["answer"] for row in map(json.loads, filter(str.strip, f))}

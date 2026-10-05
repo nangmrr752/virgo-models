@@ -24,6 +24,7 @@ ROOT="$VIRGO_HOME"
 [ "${1:-}" = score ] && { shift; exec bash "$CODE/scripts/score_server.sh" "$@"; }  # score the running server
 [ "${1:-}" = hearing ] && { shift; exec bash "$CODE/scripts/train_hearing_local.sh" "$@"; }  # Virgo's hearing (Whisper)
 [ "${1:-}" = distill ] && { shift; exec bash "$CODE/scripts/smart_local.sh" distill "$@"; }  # checked examples + DPO pairs
+[ "${1:-}" = baseline ] && { shift; exec bash "$CODE/scripts/smart_local.sh" baseline "$@"; }  # big hard test of the model in use
 [ "${1:-}" = mistakes ] && { shift; exec bash "$CODE/scripts/smart_local.sh" mistakes "$@"; }  # DPO pairs from Angkor's own mistakes
 [ "${1:-}" = dpo ] && { shift; exec bash "$CODE/scripts/smart_local.sh" dpo "$@"; }
 [ "${1:-}" = all ] && { shift; exec bash "$CODE/scripts/smart_local.sh" all "$@"; }
@@ -70,11 +71,17 @@ git pull -q
   python -u chat/train.py --base "$BASE" --data "$DATA" --out "$OUT" --epochs 3 $EXTRA "$@"
   echo "== Score =="
   python chat/evaluate.py --adapter "$OUT" || echo "(scoring failed; the model is still saved)"
-  # The hard test decides: the best score so far for this model is kept in <data>/logs/<model>-hard-best.json
+  # The hard test decides: the best score so far for this model is kept in <data>/logs/<model>-hardbig-best.json
   # (DPO updates it too), and a model that scores lower isn't uploaded.
-  BEST="$ROOT/logs/$NAME-hard-best.json"; NEW="$ROOT/logs/$NAME-hard-$(date +%Y%m%d-%H%M).json"
+  # (The big hard test: chat/eval/hard.jsonl + hard2.jsonl, 326 questions.)
+  BEST="$ROOT/logs/$NAME-hardbig-best.json"; NEW="$ROOT/logs/$NAME-hardbig-$(date +%Y%m%d-%H%M).json"
+  # No best score yet but a model already on Hugging Face: score that one first, so a worse model can't replace it.
+  REPO=$(python scripts/names.py resolve "$NAME" 2>/dev/null || echo "$ME/$NAME")
+  if [ ! -f "$BEST" ] && python -c "from huggingface_hub import HfApi; import sys; sys.exit(0 if HfApi().file_exists('$REPO', 'adapter_config.json') else 1)" 2>/dev/null; then
+    bash scripts/smart_local.sh baseline "$WHICH" "${NAME##*-}" || true
+  fi
   COMPARE=(); [ -f "$BEST" ] && COMPARE=(--compare "$BEST")
-  python chat/evaluate.py --questions chat/eval/hard.jsonl --adapter "$OUT" --report "$NEW" "${COMPARE[@]}" | tail -20 \
+  python chat/evaluate.py --questions chat/eval/hard.jsonl,chat/eval/hard2.jsonl --adapter "$OUT" --report "$NEW" "${COMPARE[@]}" | tail -20 \
     || echo "(hard test failed to run)"
   if [ -f "$BEST" ] && [ -f "$NEW" ] && ! python -c "import json,sys; sys.exit(0 if json.load(open('$NEW'))['overall'] >= json.load(open('$BEST'))['overall'] else 1)"; then
     echo "⚠️ $NAME scored lower on the hard test than the best one so far: not uploaded (kept in $OUT)"
