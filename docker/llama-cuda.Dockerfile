@@ -15,7 +15,9 @@ RUN cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="${ARCHS}" -DLLAMA_
     && cmake --build build --config Release -j 8 --target llama-server
 
 FROM nvidia/cuda:${CUDA}-runtime-ubuntu22.04
-RUN apt-get update && apt-get install -y --no-install-recommends libcurl4 libgomp1 curl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends libcurl4 libgomp1 curl ca-certificates python3 && rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/build/bin/ /app/
+# Virgo's switcher (Angkor-2.0 normally, Bayon-2.0 on demand): docker-compose.yml runs it as the entrypoint.
+COPY llama_router.py /app/llama_router.py
 ENV LD_LIBRARY_PATH=/app
 ENTRYPOINT ["/app/llama-server"]

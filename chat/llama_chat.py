@@ -32,21 +32,26 @@ THINKING = re.compile(r"<think>.*?</think>|<\|channel\|>analysis.*?<\|end\|>", r
 
 
 class LlamaChat:
-    def __init__(self, url, name="Angkor-2.0", timeout=600):
+    def __init__(self, url, name="Angkor-2.0", timeout=600, model=None, think=None):
+        """model: which model the switcher loads ("bayon" for Bayon-2.0; Angkor-2.0 when empty).
+        think: let it think first (default: VIRGO_LLAMA_THINK=1)."""
         self.url = url.rstrip("/")
         self.name = name
         self.system = system_for(name)
         self.timeout = timeout
-        print(f"Virgo chat: {name} through llama.cpp at {self.url}")
+        self.model = model
+        self.think = os.environ.get("VIRGO_LLAMA_THINK") == "1" if think is None else think
+        print(f"Virgo chat: {name} through llama.cpp at {self.url}{f' (model {model})' if model else ''}")
 
     def _body(self, history, max_new_tokens, temperature, system=None, stream=False):
         msgs = [{"role": "system", "content": system or self.system}] + turns(history)
         # No thinking first (VIRGO_LLAMA_THINK=1 turns it on): Gemma 4 can think through the whole answer length
         # (a Khmer question used all 512 tokens thinking and answered nothing), and live voice must start fast.
-        think = os.environ.get("VIRGO_LLAMA_THINK") == "1"
+        think = self.think
         return json.dumps({"messages": msgs, "max_tokens": max_new_tokens + (2048 if think else 0),
                            "temperature": max(temperature, 0), "top_p": 0.9, "stream": stream,
-                           "chat_template_kwargs": {"enable_thinking": think}}).encode()
+                           "chat_template_kwargs": {"enable_thinking": think},
+                           **({"model": self.model} if self.model else {})}).encode()
 
     def _request(self, body):
         return urllib.request.Request(self.url + "/v1/chat/completions", data=body, method="POST",
