@@ -46,7 +46,15 @@ def chat_models():
         folder = folder if os.path.isabs(folder) else os.path.join(ROOT, folder)
         if name and os.path.isdir(folder):
             found[name.strip()] = folder
-    return found or {"virgo-1.0-angkor": os.path.join(ROOT, "chat/out/virgo-1.0-chat-lora")}
+    found = found or {"virgo-1.0-angkor": os.path.join(ROOT, "chat/out/virgo-1.0-chat-lora")}
+    if llama_bayon():  # Bayon-2.0 through llama.cpp's switcher (on demand), in place of a local Bayon
+        found["virgo-1.0-bayon"] = "llama:bayon"
+    return found
+
+
+def llama_bayon():
+    """Bayon-2.0 runs through llama.cpp (the llama service's switcher loads it on demand)."""
+    return bool(os.environ.get("VIRGO_LLAMA_URL", "").strip() and os.environ.get("VIRGO_BAYON_MODEL", "").strip())
 
 
 def load_chat(model=None):
@@ -68,6 +76,13 @@ def load_chat(model=None):
         from llama_chat import LlamaChat
 
         _models[key] = LlamaChat(llama, name=os.environ.get("VIRGO_LLAMA_NAME", "Angkor-2.0").strip() or "Angkor-2.0")
+        return _models[key]
+    if llama and model == "virgo-1.0-bayon" and llama_bayon() and key not in _models:
+        from llama_chat import LlamaChat
+
+        # The switcher loads it on demand: the first answer can wait 30-90 s while Angkor makes room.
+        _models[key] = LlamaChat(llama, name=os.environ.get("VIRGO_BAYON_NAME", "Bayon-2.0").strip() or "Bayon-2.0",
+                                 timeout=1200, model="bayon", think=os.environ.get("VIRGO_BAYON_THINK") == "1")
         return _models[key]
     if key not in _models:
         from virgo_chat import VirgoChat
@@ -176,7 +191,8 @@ def models():
     ids = list(chat_models())
     # Each model's name (the website shows it): the llama.cpp model's VIRGO_LLAMA_NAME (Angkor-2.0), else Angkor-1.0 / Bayon-1.0.
     llama_name = (os.environ.get("VIRGO_LLAMA_NAME", "").strip() or "Angkor-2.0") if os.environ.get("VIRGO_LLAMA_URL", "").strip() else ""
-    names = {m: (llama_name if i == 0 and llama_name else "Bayon-1.0" if "bayon" in m else "Angkor-1.0") for i, m in enumerate(ids)}
+    bayon_name = (os.environ.get("VIRGO_BAYON_NAME", "").strip() or "Bayon-2.0") if llama_bayon() else "Bayon-1.0"
+    names = {m: (llama_name if i == 0 and llama_name else bayon_name if "bayon" in m else "Angkor-1.0") for i, m in enumerate(ids)}
     return {**info, "chat_models": ids, "chat_names": names} if isinstance(info, dict) else info
 
 
