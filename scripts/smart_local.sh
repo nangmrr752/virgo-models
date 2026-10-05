@@ -4,6 +4,7 @@
 #
 #   bash scripts/train_local.sh distill [N]        # Bayon-1.0-27B answers N checked problems (default 12000, ~1 day)
 #   bash scripts/train_local.sh mistakes [N]       # Angkor tries N problems (default 6000); Bayon answers the ones it got wrong
+#   bash scripts/train_local.sh baseline angkor 12b  # score the model on Hugging Face on the big hard test (once)
 #   bash scripts/train_local.sh dpo angkor 12b     # DPO on the good/bad pairs; uploads only if the hard test improves
 #   bash scripts/train_local.sh all                # distill → Angkor 12B → DPO → Bayon 27B → DPO → hearing
 #
@@ -18,6 +19,8 @@ STEP="${1:-}"; shift || true
 ME=$(python -c "from huggingface_hub import HfApi; print(HfApi().whoami()['name'])")
 DATA_REPO=$(python scripts/names.py resolve Data-1.0 2>/dev/null || echo "$ME/Virgo-1.0-Angkor-Data")
 mkdir -p "$ROOT/logs" chat/dpo
+# The big hard test (326 questions) decides every upload; its best scores are in <data>/logs/<model>-hardbig-best.json.
+HARD="chat/eval/hard.jsonl,chat/eval/hard2.jsonl"
 
 fetch() {  # fetch <file> <folder>: a file from Virgo's dataset, if it's there
   python -c "from huggingface_hub import hf_hub_download as d; d('$DATA_REPO', '$1', repo_type='dataset', local_dir='$2')" >/dev/null 2>&1 || true
@@ -65,6 +68,19 @@ mistakes() {  # DPO pairs from Angkor's own mistakes (scripts/student_pairs.py)
   PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python -u scripts/student_pairs.py --stage teacher --adapter "$adapter" --hf-repo "$DATA_REPO"
 }
 
+baseline() {  # baseline angkor 12b: the big hard test score of the model on Hugging Face (what later runs must beat)
+  local which="${1:-angkor}" size="${2:-12b}" name repo dir
+  name=$(name_for "$which" "$size")
+  repo=$(python scripts/names.py resolve "$name" 2>/dev/null || echo "$ME/$name")
+  dir="$ROOT/out/$name-current"
+  need_gpu_free
+  rm -rf "$dir" && python -c "from huggingface_hub import snapshot_download as s; s('$repo', local_dir='$dir')" >/dev/null
+  echo "== Big hard test of $repo (the model in use) =="
+  python -u chat/evaluate.py --questions "$HARD" --adapter "$dir" --report "$ROOT/logs/$name-hardbig-best.json" | tail -12
+  rm -rf "$dir"
+  echo "✅ Baseline for $name saved: $ROOT/logs/$name-hardbig-best.json"
+}
+
 name_for() {  # name_for angkor 12b → Angkor-1.0-12B
   echo "${1^}-1.0-${2^^}"
 }
@@ -84,15 +100,15 @@ dpo() {
   [ -f "$out/adapter_config.json" ] || python -c "from huggingface_hub import snapshot_download as s; s('$repo', local_dir='$out')" >/dev/null
   local extra=""; [ "$size" = 27b ] && extra="--max-len 512"  # 27B in 4 bits fills most of a 24 GB GPU
   echo "== DPO for $name on $(cat chat/dpo/*.jsonl | grep -c '"chosen"') pairs =="
-  python -u chat/evaluate.py --questions chat/eval/hard.jsonl --adapter "$out" --report "$ROOT/logs/$name-hard-before.json" | tail -15
+  python -u chat/evaluate.py --questions $HARD --adapter "$out" --report "$ROOT/logs/$name-hardbig-before.json" | tail -15
   PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python -u chat/train_dpo.py --adapter "$out" --out "$out-dpo" $extra
-  python -u chat/evaluate.py --questions chat/eval/hard.jsonl --adapter "$out-dpo" --report "$ROOT/logs/$name-hard-after.json" \
-    --compare "$ROOT/logs/$name-hard-before.json" | tail -20
-  hard_before=$(python -c "import json; print(json.load(open('$ROOT/logs/$name-hard-before.json'))['overall'])")
-  hard_after=$(python -c "import json; print(json.load(open('$ROOT/logs/$name-hard-after.json'))['overall'])")
+  python -u chat/evaluate.py --questions $HARD --adapter "$out-dpo" --report "$ROOT/logs/$name-hardbig-after.json" \
+    --compare "$ROOT/logs/$name-hardbig-before.json" | tail -20
+  hard_before=$(python -c "import json; print(json.load(open('$ROOT/logs/$name-hardbig-before.json'))['overall'])")
+  hard_after=$(python -c "import json; print(json.load(open('$ROOT/logs/$name-hardbig-after.json'))['overall'])")
   # Better than this model before DPO, and than the best upload so far (a model train_local.sh didn't upload).
   local best="$hard_before"
-  [ -f "$ROOT/logs/$name-hard-best.json" ] && best=$(python -c "import json; print(max($hard_before, json.load(open('$ROOT/logs/$name-hard-best.json'))['overall']))")
+  [ -f "$ROOT/logs/$name-hardbig-best.json" ] && best=$(python -c "import json; print(max($hard_before, json.load(open('$ROOT/logs/$name-hardbig-best.json'))['overall']))")
   if python -c "import sys; sys.exit(0 if $hard_after >= $best else 1)"; then
     python - "$repo" "$out-dpo" "$hard_before" "$hard_after" <<'PY'
 import sys
@@ -102,7 +118,7 @@ HfApi().upload_folder(folder_path=folder, repo_id=repo, ignore_patterns=["checkp
                       commit_message=f"DPO: hard test {before:.1%} → {after:.1%}")
 PY
     rm -rf "$out" && mv "$out-dpo" "$out"
-    cp "$ROOT/logs/$name-hard-after.json" "$ROOT/logs/$name-hard-best.json"
+    cp "$ROOT/logs/$name-hardbig-after.json" "$ROOT/logs/$name-hardbig-best.json"
     echo "✅ $name improved by DPO ($hard_before → $hard_after) and is uploaded to $repo"
   else
     echo "⚠️ DPO didn't beat the best $name on the hard test ($hard_after vs $best): the model on Hugging Face stays as it was"
@@ -117,6 +133,7 @@ run_logged() {  # run_logged <name> <command...>
 case "$STEP" in
   distill) run_logged distill distill "$@" ;;
   mistakes) run_logged mistakes mistakes "$@" ;;
+  baseline) run_logged "baseline-${1:-angkor}-${2:-12b}" baseline "$@" ;;
   dpo) run_logged "dpo-${1:-angkor}-${2:-12b}" dpo "$@" ;;
   all)
     # Each step continues where it left off, so running "all" again skips work already done.
@@ -128,5 +145,5 @@ case "$STEP" in
     run_logged hearing bash scripts/train_local.sh hearing
     echo "✅ All done. Start Virgo again (docker compose up -d --build) and score it: bash scripts/train_local.sh score"
     ;;
-  *) echo "Use: distill [N] | mistakes [N] | dpo angkor 12b | all"; exit 1 ;;
+  *) echo "Use: distill [N] | mistakes [N] | baseline angkor 12b | dpo angkor 12b | all"; exit 1 ;;
 esac

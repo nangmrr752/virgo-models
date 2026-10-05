@@ -13,6 +13,7 @@ chat/dpo/student_failed.jsonl; the teacher stage turns them into chat/dpo/studen
 continue where they stopped. Test questions (chat/eval) are never used.
 """
 import argparse
+import glob
 import json
 import os
 import random
@@ -38,7 +39,7 @@ def rows(path):
 
 def blocked_questions():
     blocked = set()
-    for path in ("chat/eval/questions.jsonl", "chat/eval/hard.jsonl"):
+    for path in sorted(glob.glob(os.path.join(HERE, "..", "chat", "eval", "*.jsonl"))):  # every test set
         blocked |= {norm(r["q"]) for r in rows(path)}
     return blocked
 
