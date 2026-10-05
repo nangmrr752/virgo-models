@@ -276,7 +276,10 @@ def videos(body: VideoBody):
 @app.websocket("/v1/realtime")
 async def realtime(ws: WebSocket):
     key = os.environ.get("VIRGO_API_KEY")
-    if key and ws.query_params.get("key") != key:
+    # The key comes in the Authorization header (the website's Worker sends it there); ?key= in the
+    # address is still accepted for older clients, but addresses can end up in logs.
+    given = ws.headers.get("authorization", "")
+    if key and given != f"Bearer {key}" and ws.query_params.get("key") != key:
         await ws.close(code=1008)
         return
     await ws.accept()
