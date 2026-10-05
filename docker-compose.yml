@@ -43,11 +43,14 @@ services:
     restart: unless-stopped
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
+    # --reasoning-budget 0: answers without thinking first (fast, and Khmer answers aren't used up by
+    # thinking); -1 lets it think (then also VIRGO_LLAMA_THINK=1 in .env).
     # No -ngl: llama.cpp fits the model into the GPU memory left after Virgo's voice and ears, keeping the
     # rest (some MoE experts) in RAM. More flags with VIRGO_LLAMA_ARGS (e.g. "-ngl 999" when the GPU is free).
     command: >-
       -hf ${VIRGO_LLAMA_MODEL:-unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_XL}
-      -c ${VIRGO_LLAMA_CTX:-8192} --jinja --host 0.0.0.0 --port 8080 ${VIRGO_LLAMA_ARGS:-}
+      -c ${VIRGO_LLAMA_CTX:-8192} --jinja --reasoning-budget ${VIRGO_LLAMA_REASONING_BUDGET:-0}
+      --host 0.0.0.0 --port 8080 ${VIRGO_LLAMA_ARGS:-}
     # Start after Virgo has loaded its voice and ears, so they always get their GPU memory first.
     depends_on:
       virgo: { condition: service_healthy }
