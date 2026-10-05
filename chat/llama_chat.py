@@ -3,6 +3,7 @@ for models our own 4-bit loader can't fit on one GPU, like Angkor-2.0 on Gemma 4
 runs in about 15 GB as a 4-bit GGUF). Same interface as VirgoChat (reply, stream), so the API and the
 live voice don't change; the server is set with VIRGO_LLAMA_URL (serve/app.py)."""
 import json
+import os
 import re
 import urllib.request
 
@@ -22,8 +23,12 @@ class LlamaChat:
 
     def _body(self, history, max_new_tokens, temperature, system=None, stream=False):
         msgs = [{"role": "system", "content": system or self.system}] + turns(history)
-        return json.dumps({"messages": msgs, "max_tokens": max_new_tokens, "temperature": max(temperature, 0),
-                           "top_p": 0.9, "stream": stream}).encode()
+        # No thinking first (VIRGO_LLAMA_THINK=1 turns it on): Gemma 4 can think through the whole answer length
+        # (a Khmer question used all 512 tokens thinking and answered nothing), and live voice must start fast.
+        think = os.environ.get("VIRGO_LLAMA_THINK") == "1"
+        return json.dumps({"messages": msgs, "max_tokens": max_new_tokens + (2048 if think else 0),
+                           "temperature": max(temperature, 0), "top_p": 0.9, "stream": stream,
+                           "chat_template_kwargs": {"enable_thinking": think}}).encode()
 
     def _request(self, body):
         return urllib.request.Request(self.url + "/v1/chat/completions", data=body, method="POST",
