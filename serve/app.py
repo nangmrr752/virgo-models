@@ -17,6 +17,7 @@ GET /v1/models lists them under "chat_models", and /v1/chat picks one by "model"
 Models load the first time they're used, so the server starts fast and only uses memory for the
 abilities people actually call. Set VIRGO_API_KEY to require "Authorization: Bearer <key>".
 """
+import contextlib
 import io
 import json
 import threading
@@ -201,7 +202,10 @@ def chat(body: ChatBody):
     if not body.messages:
         raise HTTPException(400, "No messages.")
     bot = load_chat(body.model)
-    lock = _locks.setdefault(id(bot), threading.Lock())  # one answer at a time per model: no GPU contention
+    # One answer at a time per local model (no GPU contention). llama.cpp queues requests itself: no lock,
+    # so a stream whose caller went away (its generator not closed yet) can't hold up every later chat.
+    llama = type(bot).__name__ == "LlamaChat"
+    lock = contextlib.nullcontext() if llama else _locks.setdefault(id(bot), threading.Lock())
     max_tokens = min(body.max_tokens, 2048)
     if body.stream:
         def pieces():
