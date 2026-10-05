@@ -24,6 +24,7 @@ ROOT="$VIRGO_HOME"
 [ "${1:-}" = score ] && { shift; exec bash "$CODE/scripts/score_server.sh" "$@"; }  # score the running server
 [ "${1:-}" = hearing ] && { shift; exec bash "$CODE/scripts/train_hearing_local.sh" "$@"; }  # Virgo's hearing (Whisper)
 [ "${1:-}" = distill ] && { shift; exec bash "$CODE/scripts/smart_local.sh" distill "$@"; }  # checked examples + DPO pairs
+[ "${1:-}" = basetest-gguf ] && { shift; exec bash "$CODE/scripts/smart_local.sh" basetest-gguf "$@"; }  # a GGUF base in llama.cpp
 [ "${1:-}" = basetest ] && { shift; exec bash "$CODE/scripts/smart_local.sh" basetest "$@"; }  # an untrained base model on the big hard test
 [ "${1:-}" = baseline ] && { shift; exec bash "$CODE/scripts/smart_local.sh" baseline "$@"; }  # big hard test of the model in use
 [ "${1:-}" = mistakes ] && { shift; exec bash "$CODE/scripts/smart_local.sh" mistakes "$@"; }  # DPO pairs from Angkor's own mistakes
