@@ -173,7 +173,11 @@ def models():
 
     with open(os.path.join(ROOT, "virgo.json"), encoding="utf-8") as f:
         info = json.load(f)
-    return {**info, "chat_models": list(chat_models())} if isinstance(info, dict) else info
+    ids = list(chat_models())
+    # Each model's name (the website shows it): the llama.cpp model's VIRGO_LLAMA_NAME (Angkor-2.0), else Angkor-1.0 / Bayon-1.0.
+    llama_name = (os.environ.get("VIRGO_LLAMA_NAME", "").strip() or "Angkor-2.0") if os.environ.get("VIRGO_LLAMA_URL", "").strip() else ""
+    names = {m: (llama_name if i == 0 and llama_name else "Bayon-1.0" if "bayon" in m else "Angkor-1.0") for i, m in enumerate(ids)}
+    return {**info, "chat_models": ids, "chat_names": names} if isinstance(info, dict) else info
 
 
 @app.post("/v1/chat", dependencies=[Depends(auth)])
