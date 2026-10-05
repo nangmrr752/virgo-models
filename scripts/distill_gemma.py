@@ -61,12 +61,10 @@ def load_teacher(name):
         kwargs["max_memory"] = {i: "13GiB" for i in range(torch.cuda.device_count())}
     if not big_gpu:  # 27B in 4 bits (~16 GB) fits a 24 GB L4
         kwargs["quantization_config"] = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
-    try:
-        model = AutoModelForCausalLM.from_pretrained(name, **kwargs)
-    except ValueError:  # Gemma 3 4B and up are image+text models
-        from transformers import Gemma3ForConditionalGeneration
+    sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "chat"))
+    from virgo_chat import load_causal
 
-        model = Gemma3ForConditionalGeneration.from_pretrained(name, **kwargs)
+    model = load_causal(name, **kwargs)
     return tok, model.eval()
 
 

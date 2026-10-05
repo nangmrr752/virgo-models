@@ -4,6 +4,7 @@
 #
 #   bash scripts/train_local.sh distill [N]        # Bayon-1.0-27B answers N checked problems (default 12000, ~1 day)
 #   bash scripts/train_local.sh mistakes [N]       # Angkor tries N problems (default 6000); Bayon answers the ones it got wrong
+#   bash scripts/train_local.sh basetest google/gemma-4-31b-it  # an untrained base model on the big hard test
 #   bash scripts/train_local.sh baseline angkor 12b  # score the model on Hugging Face on the big hard test (once)
 #   bash scripts/train_local.sh dpo angkor 12b     # DPO on the good/bad pairs; uploads only if the hard test improves
 #   bash scripts/train_local.sh all                # distill → Angkor 12B → DPO → Bayon 27B → DPO → hearing
@@ -81,6 +82,17 @@ baseline() {  # baseline angkor 12b: the big hard test score of the model on Hug
   echo "✅ Baseline for $name saved: $ROOT/logs/$name-hardbig-best.json"
 }
 
+basetest() {  # basetest google/gemma-4-31b-it: an untrained base model on the big hard test (nothing uploaded)
+  local base="${1:?which base model, e.g. google/gemma-4-31b-it}" tag
+  tag=$(echo "$base" | tr '/' '_')
+  need_gpu_free
+  python -c "import transformers; print('transformers', transformers.__version__)"
+  echo "== Big hard test of $base (no training) =="
+  python -u chat/evaluate.py --questions "$HARD" --base "$base" --adapter none --report "$ROOT/logs/base-$tag-hardbig.json" \
+    $([ -f "$ROOT/logs/Angkor-1.0-12B-hardbig-best.json" ] && echo --compare "$ROOT/logs/Angkor-1.0-12B-hardbig-best.json") | tail -14
+  echo "Report: $ROOT/logs/base-$tag-hardbig.json (compared with Angkor-1.0-12B, the model in use)"
+}
+
 name_for() {  # name_for angkor 12b → Angkor-1.0-12B
   echo "${1^}-1.0-${2^^}"
 }
@@ -133,6 +145,7 @@ run_logged() {  # run_logged <name> <command...>
 case "$STEP" in
   distill) run_logged distill distill "$@" ;;
   mistakes) run_logged mistakes mistakes "$@" ;;
+  basetest) run_logged "basetest" basetest "$@" ;;
   baseline) run_logged "baseline-${1:-angkor}-${2:-12b}" baseline "$@" ;;
   dpo) run_logged "dpo-${1:-angkor}-${2:-12b}" dpo "$@" ;;
   all)
@@ -145,5 +158,5 @@ case "$STEP" in
     run_logged hearing bash scripts/train_local.sh hearing
     echo "✅ All done. Start Virgo again (docker compose up -d --build) and score it: bash scripts/train_local.sh score"
     ;;
-  *) echo "Use: distill [N] | mistakes [N] | baseline angkor 12b | dpo angkor 12b | all"; exit 1 ;;
+  *) echo "Use: distill [N] | mistakes [N] | basetest <hf model> | baseline angkor 12b | dpo angkor 12b | all"; exit 1 ;;
 esac

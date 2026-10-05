@@ -27,7 +27,7 @@ DEFAULT_BASE = "google/gemma-3-4b-it"
 
 
 def load_base(name, four_bit):
-    """The base model; Gemma 3 4B and up are image+text models, so fall back to their full class."""
+    """The base model (Gemma 3 4B and up and Gemma 4 are image+text models: see virgo_chat.load_causal)."""
     kwargs = {}
     if torch.cuda.is_available():
         kwargs["torch_dtype"] = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
@@ -41,12 +41,9 @@ def load_base(name, four_bit):
             kwargs["device_map"] = "auto"
     else:
         kwargs["torch_dtype"] = torch.float32
-    try:
-        return AutoModelForCausalLM.from_pretrained(name, **kwargs)
-    except ValueError:
-        from transformers import Gemma3ForConditionalGeneration
+    from virgo_chat import load_causal
 
-        return Gemma3ForConditionalGeneration.from_pretrained(name, **kwargs)
+    return load_causal(name, **kwargs)
 
 
 def load_examples(pattern):

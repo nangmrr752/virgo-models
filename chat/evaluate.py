@@ -36,6 +36,7 @@ LATIN_WORD = re.compile(r"[A-Za-z]{3,}")
 
 SCRIPTS = {"th": re.compile(r"[\u0e00-\u0e7f]"), "zh": re.compile(r"[\u4e00-\u9fff]"), "ja": re.compile(r"[\u3040-\u30ff]"),
            "ko": re.compile(r"[\uac00-\ud7af]"), "lo": re.compile(r"[\u0e80-\u0eff]"), "ru": re.compile(r"[\u0400-\u04ff]")}
+THINKING = re.compile(r"<think>.*?</think>|<\|channel\|>analysis.*?<\|end\|>|<\|?thought\|?>.*?<\|?/?thought\|?>", re.S)
 KHMER_DIGITS = str.maketrans("០១២៣៤៥៦៧៨៩", "0123456789")
 
 
@@ -99,7 +100,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--questions", default="chat/eval/questions.jsonl")
     p.add_argument("--base", help="defaults to the adapter's own base (or Gemma 3 4B)")
-    p.add_argument("--adapter", default="chat/out/virgo-1.0-chat-lora")
+    p.add_argument("--adapter", default="chat/out/virgo-1.0-chat-lora", help='"none": the base model alone, e.g. --base google/gemma-4-31b-it --adapter none')
     p.add_argument("--answers", help="a .jsonl of {\"q\": ..., \"answer\": ...} to score instead of running the model")
     p.add_argument("--report", default="chat/eval/report.json")
     p.add_argument("--server", help="score a running Virgo server instead of loading a model, e.g. http://127.0.0.1:8088")
@@ -137,8 +138,12 @@ def main():
         sys.path.append(os.path.dirname(__file__))
         from virgo_chat import VirgoChat
 
-        bot = VirgoChat(args.base, args.adapter if os.path.isdir(args.adapter) else None)
-        ask = lambda q: bot.reply([{"role": "user", "content": q}], temperature=0)
+        adapter = None if args.adapter.lower() == "none" or not os.path.isdir(args.adapter) else args.adapter
+        if not adapter and not args.base:
+            raise SystemExit("--adapter none needs --base, e.g. --base google/gemma-4-31b-it")
+        bot = VirgoChat(args.base, adapter)
+        # Reasoning models (Gemma 4, Qwen…) may think first: only the answer after the thinking is scored.
+        ask = lambda q: THINKING.sub("", bot.reply([{"role": "user", "content": q}], temperature=0)).strip()
 
     by_skill = defaultdict(lambda: [0, 0])
     rows = []
