@@ -6,6 +6,7 @@
     python chat/evaluate.py --server http://127.0.0.1:8088 --key $VIRGO_API_KEY --model virgo-1.0-bayon
                                                               # score the running Virgo server (no second copy in GPU memory)
     python chat/evaluate.py --compare old_report.json         # also show what changed since an earlier report
+    python chat/evaluate.py --openai http://127.0.0.1:8089     # an OpenAI-compatible server (llama.cpp's llama-server)
 
 Each question in chat/eval/questions.jsonl says what a good answer needs:
   lang       "en", "km", "fr", "es", "th", "zh", "vi"...: the answer must be in that language
@@ -106,6 +107,8 @@ def main():
     p.add_argument("--server", help="score a running Virgo server instead of loading a model, e.g. http://127.0.0.1:8088")
     p.add_argument("--key", default=os.environ.get("VIRGO_API_KEY", ""), help="the server's VIRGO_API_KEY")
     p.add_argument("--model", help="with --server: which chat model, e.g. virgo-1.0-bayon")
+    p.add_argument("--openai", help="score an OpenAI-compatible server instead, e.g. llama.cpp's llama-server at "
+                   "http://127.0.0.1:8089 (Virgo's instructions are sent as the system message)")
     p.add_argument("--compare", help="an earlier report.json: show which skills got better or worse")
     args = p.parse_args()
 
@@ -117,6 +120,28 @@ def main():
         with open(args.answers, encoding="utf-8") as f:
             saved = {row["q"]: row["answer"] for row in map(json.loads, filter(str.strip, f))}
         ask = lambda q: saved.get(q, "")
+    elif args.openai:
+        import sys
+        import urllib.request
+
+        sys.path.append(os.path.dirname(__file__))
+        from virgo_chat import system_for
+
+        system = system_for(None)
+
+        def ask(q):
+            body = {"messages": [{"role": "system", "content": system}, {"role": "user", "content": q}],
+                    "max_tokens": 1024, "temperature": 0, **({"model": args.model} if args.model else {})}
+            req = urllib.request.Request(args.openai.rstrip("/") + "/v1/chat/completions", data=json.dumps(body).encode(), method="POST",
+                                         headers={"content-type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=600) as res:
+                    message = json.loads(res.read())["choices"][0]["message"]
+                # Thinking may come apart (reasoning_content) or inside the text: only the answer is scored.
+                return THINKING.sub("", message.get("content") or "").strip()
+            except Exception as err:
+                print("  (no answer:", err, ")")
+                return ""
     elif args.server:
         import urllib.request
 

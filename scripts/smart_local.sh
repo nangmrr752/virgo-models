@@ -5,6 +5,7 @@
 #   bash scripts/train_local.sh distill [N]        # Bayon-1.0-27B answers N checked problems (default 12000, ~1 day)
 #   bash scripts/train_local.sh mistakes [N]       # Angkor tries N problems (default 6000); Bayon answers the ones it got wrong
 #   bash scripts/train_local.sh basetest google/gemma-4-31b-it  # an untrained base model on the big hard test
+#   bash scripts/train_local.sh basetest-gguf unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_XL  # a GGUF in llama.cpp (MoE models)
 #   bash scripts/train_local.sh baseline angkor 12b  # score the model on Hugging Face on the big hard test (once)
 #   bash scripts/train_local.sh dpo angkor 12b     # DPO on the good/bad pairs; uploads only if the hard test improves
 #   bash scripts/train_local.sh all                # distill → Angkor 12B → DPO → Bayon 27B → DPO → hearing
@@ -93,6 +94,33 @@ basetest() {  # basetest google/gemma-4-31b-it: an untrained base model on the b
   echo "Report: $ROOT/logs/base-$tag-hardbig.json (compared with Angkor-1.0-12B, the model in use)"
 }
 
+basetest_gguf() {  # basetest-gguf <repo>[:quant]: a GGUF base in llama.cpp (GPU) on the big hard test, nothing uploaded
+  # For models our 4-bit loader can't fit, e.g. the Gemma 4 26B A4B MoE in Google's QAT 4-bit: about 15 GB.
+  local spec="${1:?a GGUF on Hugging Face, e.g. unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_XL}" tag port=8089 image
+  image="${VIRGO_LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}"
+  tag=$(echo "$spec" | tr '/:' '__')
+  need_gpu_free
+  mkdir -p "$ROOT/llama-cache"
+  docker rm -f virgo-llama >/dev/null 2>&1 || true
+  echo "== llama.cpp: $spec (the first run downloads it into $ROOT/llama-cache) =="
+  docker run -d --name virgo-llama --gpus all -p 127.0.0.1:$port:8080 -v "$ROOT/llama-cache:/root/.cache/llama.cpp" \
+    -e HF_TOKEN="$(python -c 'from huggingface_hub import get_token; print(get_token() or "")')" \
+    "$image" -hf "$spec" -ngl 999 -c 8192 --jinja --host 0.0.0.0 --port 8080 >/dev/null
+  echo -n "Waiting for the model to download and load"
+  for _ in $(seq 1 720); do  # up to 2 hours (a first download is ~15 GB)
+    curl -sf "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break
+    docker inspect -f '{{.State.Running}}' virgo-llama 2>/dev/null | grep -q true || { echo; docker logs --tail 30 virgo-llama; docker rm -f virgo-llama >/dev/null; exit 1; }
+    echo -n "."; sleep 10
+  done
+  echo
+  curl -sf "http://127.0.0.1:$port/health" >/dev/null || { docker logs --tail 30 virgo-llama; docker rm -f virgo-llama >/dev/null; echo "❌ llama.cpp didn't start"; exit 1; }
+  echo "== Big hard test of $spec (no training) =="
+  python -u chat/evaluate.py --questions "$HARD" --openai "http://127.0.0.1:$port" --report "$ROOT/logs/base-$tag-hardbig.json" \
+    $([ -f "$ROOT/logs/Angkor-1.0-12B-hardbig-best.json" ] && echo --compare "$ROOT/logs/Angkor-1.0-12B-hardbig-best.json") | tail -14 || true
+  docker rm -f virgo-llama >/dev/null
+  echo "Report: $ROOT/logs/base-$tag-hardbig.json (compared with Angkor-1.0-12B, the model in use)"
+}
+
 name_for() {  # name_for angkor 12b → Angkor-1.0-12B
   echo "${1^}-1.0-${2^^}"
 }
@@ -146,6 +174,7 @@ case "$STEP" in
   distill) run_logged distill distill "$@" ;;
   mistakes) run_logged mistakes mistakes "$@" ;;
   basetest) run_logged "basetest" basetest "$@" ;;
+  basetest-gguf) run_logged "basetest-gguf" basetest_gguf "$@" ;;
   baseline) run_logged "baseline-${1:-angkor}-${2:-12b}" baseline "$@" ;;
   dpo) run_logged "dpo-${1:-angkor}-${2:-12b}" dpo "$@" ;;
   all)
@@ -158,5 +187,5 @@ case "$STEP" in
     run_logged hearing bash scripts/train_local.sh hearing
     echo "✅ All done. Start Virgo again (docker compose up -d --build) and score it: bash scripts/train_local.sh score"
     ;;
-  *) echo "Use: distill [N] | mistakes [N] | basetest <hf model> | baseline angkor 12b | dpo angkor 12b | all"; exit 1 ;;
+  *) echo "Use: distill [N] | mistakes [N] | basetest <hf model> | basetest-gguf <repo:quant> | baseline angkor 12b | dpo angkor 12b | all"; exit 1 ;;
 esac
