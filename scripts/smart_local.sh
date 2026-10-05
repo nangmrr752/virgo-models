@@ -118,7 +118,7 @@ basetest_gguf() {  # basetest-gguf <repo>[:quant]: a GGUF base in llama.cpp (GPU
   mkdir -p "$ROOT/llama-cache"
   docker rm -f virgo-llama >/dev/null 2>&1 || true
   echo "== llama.cpp: $spec (the first run downloads it into $ROOT/llama-cache) =="
-  docker run -d --name virgo-llama --gpus all -p 127.0.0.1:$port:8080 -v "$ROOT/llama-cache:/root/.cache/llama.cpp" \
+  docker run -d --name virgo-llama --gpus all -p 127.0.0.1:$port:8080 -v "$ROOT/llama-cache:/root/.cache/llama.cpp" -v "$HF_HOME:/root/.cache/huggingface" \
     -e HF_TOKEN="$(python -c 'from huggingface_hub import get_token; print(get_token() or "")')" \
     "$image" -hf "$spec" -ngl 999 -c 8192 --jinja --host 0.0.0.0 --port 8080 >/dev/null
   echo -n "Waiting for the model to download and load"

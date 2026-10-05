@@ -32,7 +32,7 @@ services:
   # Angkor-2.0 (Gemma 4 26B A4B, 4-bit GGUF, ~16 GB; what doesn't fit on the GPU stays in RAM) through llama.cpp. Off unless .env has
   #   COMPOSE_PROFILES=llama
   #   VIRGO_LLAMA_URL=http://llama:8080
-  # The first start downloads the model (~15 GB) into ${VIRGO_LLAMA_CACHE:-/opt/virgo/llama-cache}.
+  # The first start downloads the model (~16 GB) into the Hugging Face cache (${HF_CACHE:-/opt/virgo/hf-cache}).
   llama:
     profiles: ["llama"]
     build:
@@ -51,7 +51,10 @@ services:
     # Start after Virgo has loaded its voice and ears, so they always get their GPU memory first.
     depends_on:
       virgo: { condition: service_healthy }
+    # Newer llama.cpp keeps -hf downloads in the Hugging Face cache: the machine's own (the same as training's),
+    # so the ~16 GB model survives a rebuild instead of downloading again.
     volumes:
+      - ${HF_CACHE:-/opt/virgo/hf-cache}:/root/.cache/huggingface
       - ${VIRGO_LLAMA_CACHE:-/opt/virgo/llama-cache}:/root/.cache/llama.cpp
     deploy:
       resources:
