@@ -61,6 +61,14 @@ def load_chat(model=None):
     if model not in models:
         raise HTTPException(404, f"No chat model {model!r} here. This server has: {', '.join(models)}.")
     key = f"chat:{model}"
+    # VIRGO_LLAMA_URL: the main model (the first) answers through llama.cpp's server instead of being loaded
+    # here, e.g. Angkor-2.0 on Gemma 4 26B A4B (docker-compose.yml, "llama" service). Its name: VIRGO_LLAMA_NAME.
+    llama = os.environ.get("VIRGO_LLAMA_URL", "").strip()
+    if llama and model == next(iter(models)) and key not in _models:
+        from llama_chat import LlamaChat
+
+        _models[key] = LlamaChat(llama, name=os.environ.get("VIRGO_LLAMA_NAME", "Angkor-2.0").strip() or "Angkor-2.0")
+        return _models[key]
     if key not in _models:
         from virgo_chat import VirgoChat
 
@@ -270,6 +278,6 @@ async def realtime(ws: WebSocket):
     model = ws.query_params.get("model")
     model = model if model in chat_models() else next(iter(chat_models()))
     # The live voice has its own name: Bakong-{VIRGO_LIVE_VERSION} (2.0), answering with Angkor or Bayon.
-    chat_name = "Bayon-1.0" if "bayon" in model else "Angkor-1.0"
+    chat_name = getattr(load_chat(model), "name", None) or ("Bayon-1.0" if "bayon" in model else "Angkor-1.0")
     name = f"Bakong-{os.environ.get('VIRGO_LIVE_VERSION', '2.0').strip()}, KSN's real-time voice, answering with {chat_name}"
     await handle(Adapter(), load_chat(model), load("speech"), _models["vad"], name)

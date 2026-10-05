@@ -23,6 +23,37 @@ services:
     ports:
       - "127.0.0.1:${VIRGO_PORT:-8088}:8000"   # only this machine; the tunnel reaches it at http://127.0.0.1:8088
 
+  # Angkor-2.0 (Gemma 4 26B A4B, 4-bit GGUF, ~15 GB) through llama.cpp. Off unless .env has
+  #   COMPOSE_PROFILES=llama
+  #   VIRGO_LLAMA_URL=http://llama:8080
+  # The first start downloads the model (~15 GB) into ${VIRGO_LLAMA_CACHE:-/opt/virgo/llama-cache}.
+  llama:
+    profiles: ["llama"]
+    build:
+      context: docker
+      dockerfile: llama-cuda.Dockerfile
+      args: { CUDA: "${VIRGO_LLAMA_CUDA:-12.2.2}" }   # driver 535 → 12.2.2; driver 550+ → 12.4.1
+    image: virgo-llama:cuda12
+    restart: unless-stopped
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+    command: >-
+      -hf ${VIRGO_LLAMA_MODEL:-unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_XL}
+      -ngl 999 -c ${VIRGO_LLAMA_CTX:-8192} --jinja --host 0.0.0.0 --port 8080
+    volumes:
+      - ${VIRGO_LLAMA_CACHE:-/opt/virgo/llama-cache}:/root/.cache/llama.cpp
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - { driver: nvidia, count: all, capabilities: [gpu] }
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 3600s   # the first download takes a while
+
   tunnel:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped

@@ -42,6 +42,28 @@ def full_model(folder):
         and os.path.exists(os.path.join(folder, "config.json"))
 
 
+def turns(history):
+    """The conversation as alternating user/assistant turns, ready for a chat template. Gemma needs the
+    turns to alternate: back-to-back turns from the same side (an interrupted or failed answer in realtime
+    voice) are joined, empty ones dropped, and the conversation starts with the user."""
+    msgs = []
+    for m in history:
+        content = str(m.get("content") or "").strip()
+        if m.get("role") not in ("user", "assistant") or not content:
+            continue
+        if msgs and msgs[-1]["role"] == m["role"]:
+            msgs[-1] = {"role": m["role"], "content": f"{msgs[-1]['content']}\n\n{content}"}
+        else:
+            msgs.append({"role": m["role"], "content": content})
+    while msgs and msgs[0]["role"] != "user":
+        msgs.pop(0)
+    # Virgo learned mostly from Khmer, and on Cambodian topics ("a trip to Siem Reap") it can drift into
+    # Khmer when asked in English: a reminder right next to an English question keeps the answer English.
+    if msgs and msgs[-1]["role"] == "user" and ENGLISH.fullmatch(msgs[-1]["content"]) and re.search(r"[A-Za-z]{3}", msgs[-1]["content"]):
+        msgs[-1] = {**msgs[-1], "content": f"{msgs[-1]['content']}\n\n(Reply in English, unless I asked for another language.)"}
+    return msgs
+
+
 def load_causal(name, **kwargs):
     """A chat model by name. Gemma 3 (4B and up) and Gemma 4 are image+text models: they load with the
     image-text class when the text-only one refuses them."""
@@ -115,24 +137,7 @@ class VirgoChat:
 
     def _prompt(self, history, system=None):
         system = system or self.system
-        # Gemma needs user/assistant turns to alternate: back-to-back turns from the same side (an
-        # interrupted or failed answer in realtime voice) are joined, empty ones dropped, and the
-        # conversation starts with the user.
-        msgs = []
-        for m in history:
-            content = str(m.get("content") or "").strip()
-            if m.get("role") not in ("user", "assistant") or not content:
-                continue
-            if msgs and msgs[-1]["role"] == m["role"]:
-                msgs[-1] = {"role": m["role"], "content": f"{msgs[-1]['content']}\n\n{content}"}
-            else:
-                msgs.append({"role": m["role"], "content": content})
-        while msgs and msgs[0]["role"] != "user":
-            msgs.pop(0)
-        # Virgo learned mostly from Khmer, and on Cambodian topics ("a trip to Siem Reap") it can drift into
-        # Khmer when asked in English: a reminder right next to an English question keeps the answer English.
-        if msgs and msgs[-1]["role"] == "user" and ENGLISH.fullmatch(msgs[-1]["content"]) and re.search(r"[A-Za-z]{3}", msgs[-1]["content"]):
-            msgs[-1] = {**msgs[-1], "content": f"{msgs[-1]['content']}\n\n(Reply in English, unless I asked for another language.)"}
+        msgs = turns(history)
         if self.gemma and msgs:  # Gemma has no system role
             msgs = [{**msgs[0], "content": f"{system}\n\n{msgs[0]['content']}"}] + msgs[1:]
         else:
