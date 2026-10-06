@@ -5,6 +5,7 @@
 #                                            #   (also: bayon 12b → Bayon-1.0-12B, bayon 4b → Bayon-1.0-4B)
 #   bash scripts/train_local.sh score         # score the running Virgo server on the test set (chat/eval)
 #   bash scripts/train_local.sh hearing       # Virgo's hearing (Whisper, Khmer), see train_hearing_local.sh
+#   bash scripts/train_local.sh stttest       # hearing test: Khmer CER of the hearing models, see stt_test.sh
 #   bash scripts/train_local.sh voice         # Virgo's live voice (VoxCPM2), see train_voice_local.sh
 #   bash scripts/train_local.sh angkor 12b    # Angkor-1.0-12B (also: angkor 4b → Angkor-1.0-4B)
 #   bash scripts/train_local.sh distill [N]   # Bayon-1.0-27B answers N checked problems (default 12000), see distill_smart.py
@@ -22,6 +23,7 @@ source "$CODE/scripts/env_auto.sh"   # your server (env.sh), Colab or Kaggle
 ROOT="$VIRGO_HOME"
 [ "${1:-}" = voice ] && { shift; exec bash "$CODE/scripts/train_voice_local.sh" "$@"; }  # Virgo's live voice
 [ "${1:-}" = score ] && { shift; exec bash "$CODE/scripts/score_server.sh" "$@"; }  # score the running server
+[ "${1:-}" = stttest ] && { shift; exec bash "$CODE/scripts/stt_test.sh" "$@"; }  # hearing test (Khmer CER)
 [ "${1:-}" = hearing ] && { shift; exec bash "$CODE/scripts/train_hearing_local.sh" "$@"; }  # Virgo's hearing (Whisper)
 [ "${1:-}" = distill ] && { shift; exec bash "$CODE/scripts/smart_local.sh" distill "$@"; }  # checked examples + DPO pairs
 [ "${1:-}" = basetest-gguf ] && { shift; exec bash "$CODE/scripts/smart_local.sh" basetest-gguf "$@"; }  # a GGUF base in llama.cpp
