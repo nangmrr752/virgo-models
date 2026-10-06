@@ -16,7 +16,7 @@ small open model, tuned or set up to be Virgo: its name, its tone, English and K
 \* Where Virgo 1.0 is hosted is decided later. `serve/` runs every ability behind one API, so any
 machine with Python (a GPU server, a PC, Hugging Face Spaces, a cloud VM) can host it.
 
-Everything is described in [`virgo.json`](virgo.json).
+What the server says about itself (GET /v1/models) is in [`virgo.json`](virgo.json).
 
 ## Train Virgo in one click
 

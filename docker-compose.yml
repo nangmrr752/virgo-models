@@ -83,3 +83,7 @@ services:
     # The host's network, so the tunnel's "http://127.0.0.1:8088" reaches the virgo container's port.
     # (Not virgo's own network: that breaks every time the virgo container restarts.)
     network_mode: host
+    # Start once Virgo answers: before that, requests to 127.0.0.1:8088 are cut off ("connection reset by
+    # peer") while Virgo loads its models. Later restarts of virgo still show a few of those: harmless.
+    depends_on:
+      virgo: { condition: service_healthy }
