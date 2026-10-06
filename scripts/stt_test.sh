@@ -26,6 +26,8 @@ engine_python() {
     echo "📦 Setting up $name ($package) in $dir" >&2
     python -m venv "$dir" >&2
     "$dir/bin/pip" install -q -U pip >&2
+    # PyTorch for CUDA 12.1 (runs on driver 535); the default build needs a newer driver and falls back to the CPU.
+    "$dir/bin/pip" install -q torch torchaudio --index-url https://download.pytorch.org/whl/cu121 >&2
     "$dir/bin/pip" install -q "$package" datasets soundfile librosa >&2
   fi
   echo "$dir/bin/python"
@@ -35,7 +37,12 @@ for spec in $MODELS; do
   kind=${spec%%:*}
   case "$kind" in
     qwen3asr) py=$(engine_python qwen3asr qwen-asr) ;;
-    omni) py=$(engine_python omni omnilingual-asr) ;;
+    omni)
+      py=$(engine_python omni omnilingual-asr)
+      # fairseq2 (inside Omnilingual) needs libsndfile 1.0.31 from conda-forge in a Conda environment.
+      if [ -n "${CONDA_PREFIX:-}" ] && ! ls "$CONDA_PREFIX"/lib/libsndfile.so* >/dev/null 2>&1; then
+        conda install -y -q -c conda-forge libsndfile==1.0.31 || echo "⚠️ couldn't install libsndfile" >&2
+      fi ;;
     *) py=python ;;
   esac
   report="$VIRGO_HOME/logs/stt-$STAMP-$(echo "$spec" | tr -c 'A-Za-z0-9.-' _).json"

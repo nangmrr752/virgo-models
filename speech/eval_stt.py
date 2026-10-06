@@ -119,6 +119,14 @@ def free():
         pass
 
 
+def audio(path):
+    """The clip as 16 kHz mono floats (read here, so the pipeline needs no ffmpeg or torchcodec)."""
+    import librosa
+
+    wave, _ = librosa.load(path, sr=RATE, mono=True)
+    return {"raw": wave, "sampling_rate": RATE}
+
+
 def whisper_model(repo, language):
     import torch
     from transformers import pipeline
@@ -127,7 +135,7 @@ def whisper_model(repo, language):
     pipe = pipeline("automatic-speech-recognition", model=repo, device=device,
                     torch_dtype=torch.float16 if device == 0 else torch.float32)
     kwargs = {"generate_kwargs": {"language": language, "task": "transcribe"}} if language else {}
-    return lambda path: pipe(path, chunk_length_s=30, **kwargs)["text"]
+    return lambda path: pipe(audio(path), chunk_length_s=30, **kwargs)["text"]
 
 
 def hf_model(repo, language):
@@ -136,7 +144,7 @@ def hf_model(repo, language):
 
     pipe = pipeline("automatic-speech-recognition", model=repo, trust_remote_code=True,
                     device=0 if torch.cuda.is_available() else -1)
-    return lambda path: pipe(path)["text"]
+    return lambda path: pipe(audio(path))["text"]
 
 
 def qwen3asr_model(repo, language):
@@ -217,7 +225,7 @@ def main():
             try:
                 hyp = run(path) or ""
             except Exception as err:
-                print(f"  {os.path.basename(path)}: failed ({type(err).__name__})")
+                print(f"  {os.path.basename(path)}: failed ({type(err).__name__}: {str(err)[:200]})")
                 hyp = ""
             a, b = normalize(ref), normalize(hyp)
             e = edits(a, b)
