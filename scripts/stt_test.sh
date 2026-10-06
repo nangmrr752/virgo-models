@@ -42,6 +42,13 @@ for spec in $MODELS; do
       # fairseq2 (inside Omnilingual) needs libsndfile 1.0.31 from conda-forge in a Conda environment.
       if [ -n "${CONDA_PREFIX:-}" ] && ! ls "$CONDA_PREFIX"/lib/libsndfile.so* >/dev/null 2>&1; then
         conda install -y -q -c conda-forge libsndfile==1.0.31 || echo "⚠️ couldn't install libsndfile" >&2
+      fi
+      # fairseq2 looks in its own environment's lib folder: link Conda's libsndfile there.
+      venv="$VIRGO_HOME/venv-stt-omni"
+      if [ -n "${CONDA_PREFIX:-}" ]; then
+        mkdir -p "$venv/lib"
+        for f in "$CONDA_PREFIX"/lib/libsndfile.so*; do [ -e "$f" ] && ln -sf "$f" "$venv/lib/"; done
+        export LD_LIBRARY_PATH="$venv/lib:$CONDA_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
       fi ;;
     *) py=python ;;
   esac
