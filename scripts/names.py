@@ -21,6 +21,7 @@ NAMES = {
     "Angkor-1.0-4B": ["Virgo-Angkor-1.0-4B", "Virgo-1.0-Angkor"],
     # hearing (speech to text)
     "Angkor-1.0-STT": ["Virgo-Angkor-1.0-STT", "Virgo-1.0-Angkor-Hearing"],
+    "Angkor-1.1-STT": [],
     # voices (text to speech)
     "Angkor-1.0-TTS": ["Virgo-Angkor-1.0-TTS", "Virgo-1.0-Angkor-Voice"],
     "Bayon-1.0-TTS": ["Virgo-Bayon-1.0-TTS", "Virgo-1.0-Bayon-Voice"],

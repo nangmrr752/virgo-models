@@ -149,43 +149,99 @@ TEXT_COLUMNS = ["sentence", "transcription", "transcript", "text", "normalized_t
 
 
 def hf_dataset(work, spec, limit=20000):
-    """Any Hugging Face speech dataset ("name" or "name:split"): its audio and transcript columns are
-    found automatically. Audio is saved as it is (no decoding here), so any format librosa reads works."""
+    """Any Hugging Face speech dataset ("name", "name:split" or "name@config:split"): its audio and
+    transcript columns are found automatically. Streamed, so only the first `limit` clips are downloaded;
+    clips over 30 s (longer than Whisper hears at once) are skipped. Audio is saved as it is."""
+    import io
+
+    import soundfile as sf
     from datasets import Audio, load_dataset
 
     name, _, split = spec.partition(":")
-    folder = os.path.join(work, "hf", name.replace("/", "__") + (f"__{split}" if split else ""))
+    name, _, config = name.partition("@")
+    folder = os.path.join(work, "hf", name.replace("/", "__") + (f"__{config}" if config else "") + (f"__{split}" if split else ""))
     index = os.path.join(folder, "metadata.csv")
+    if os.path.exists(index) and sum(1 for _ in open(index, encoding="utf-8")) <= 1:
+        os.remove(index)  # left empty by a run that stopped
     if not os.path.exists(index):
         try:
-            rows = load_dataset(name, split=split or "train")
+            rows = load_dataset(name, config or None, split=split or "train", streaming=True)
+            features = rows.features or {}
         except Exception as err:
             print(f"{spec} skipped: {type(err).__name__}: {str(err)[:200]}")
             return []
-        audio = next((c for c, f in rows.features.items() if isinstance(f, Audio)), None)
-        text = next((c for c in TEXT_COLUMNS if c in rows.column_names), None)
+        audio = next((c for c, f in features.items() if isinstance(f, Audio)), None)
+        text = next((c for c in TEXT_COLUMNS if c in features), None)
         if not audio or not text:
-            print(f"{spec} skipped: no audio or transcript column (columns: {rows.column_names})")
+            print(f"{spec} skipped: no audio or transcript column (columns: {list(features)})")
             return []
-        rows = rows.cast_column(audio, Audio(decode=False)).select_columns([audio, text])
+        rows = rows.cast_column(audio, Audio(decode=False))
         os.makedirs(folder, exist_ok=True)
-        with open(index, "w", encoding="utf-8", newline="") as f:
-            out = csv.writer(f)
-            out.writerow(["file_name", "sentence"])
-            for i, row in enumerate(rows):
-                if i >= limit:
-                    break
-                clip, sentence = row[audio], str(row[text] or "").strip()
-                data = clip.get("bytes") or (open(clip["path"], "rb").read() if clip.get("path") and os.path.exists(clip["path"]) else None)
-                if not data or not sentence:
-                    continue
-                ext = os.path.splitext(clip.get("path") or "")[1] or ".wav"
-                file_name = f"{i:06d}{ext}"
-                with open(os.path.join(folder, file_name), "wb") as w:
-                    w.write(data)
-                out.writerow([file_name, sentence])
-        print(f"✅ {spec}: saved {sum(1 for _ in open(index, encoding='utf-8')) - 1} clips")
+        kept = 0
+        try:
+            with open(index + ".part", "w", encoding="utf-8", newline="") as f:
+                out = csv.writer(f)
+                out.writerow(["file_name", "sentence"])
+                for i, row in enumerate(rows):
+                    if kept >= limit:
+                        break
+                    clip, sentence = row[audio] or {}, str(row[text] or "").strip()
+                    data = clip.get("bytes") or (open(clip["path"], "rb").read() if clip.get("path") and os.path.exists(clip["path"]) else None)
+                    if not data or not sentence:
+                        continue
+                    try:
+                        info = sf.info(io.BytesIO(data))
+                        if info.duration > 30 or info.duration < 0.5:
+                            continue
+                    except Exception:
+                        pass  # a format soundfile can't read (e.g. mp3): librosa reads it later
+                    ext = os.path.splitext(clip.get("path") or "")[1] or ".wav"
+                    file_name = f"{i:06d}{ext}"
+                    with open(os.path.join(folder, file_name), "wb") as w:
+                        w.write(data)
+                    out.writerow([file_name, sentence])
+                    kept += 1
+        except Exception as err:
+            print(f"{spec} stopped early: {type(err).__name__}: {str(err)[:200]}")
+        if kept == 0:
+            print(f"{spec} skipped: no usable clips")
+            return []
+        os.replace(index + ".part", index)
+        print(f"✅ {spec}: saved {kept} clips")
     return read_extra(folder)
+
+
+def find_khmer_datasets(count):
+    """Khmer speech datasets on Hugging Face (speech recognition or text to speech: both are audio with
+    its transcript), most downloaded first. FLEURS is left out (its train split is used already; its
+    test split is the hearing test)."""
+    from huggingface_hub import HfApi
+
+    found, seen = [], set()
+    for task in ("automatic-speech-recognition", "text-to-speech"):
+        try:
+            for d in HfApi().list_datasets(language="km", task_categories=task, sort="downloads", limit=50):
+                if d.id not in seen and "fleurs" not in d.id.lower() and not getattr(d, "gated", False):
+                    seen.add(d.id)
+                    found.append((getattr(d, "downloads", 0) or 0, d.id))
+        except Exception as err:
+            print("Couldn't search Hugging Face for Khmer speech:", type(err).__name__, str(err)[:200])
+    picked = [name for _, name in sorted(found, reverse=True)[:count]]
+    print(f"🔎 Khmer speech datasets found: {', '.join(picked) or 'none'}")
+    return picked
+
+
+def test_sentences():
+    """The hearing test's sentences (FLEURS Khmer test, saved by eval_stt.py), never trained on."""
+    path = os.path.join(os.environ.get("VIRGO_HOME", ""), "stt-test", "fleurs-test", "metadata.csv")
+    if not os.path.exists(path):
+        return set()
+    with open(path, encoding="utf-8") as f:
+        return {norm_text(r["sentence"]) for r in csv.DictReader(f)}
+
+
+def norm_text(text):
+    return "".join(ch for ch in str(text) if ch.isalnum())
 
 
 def cer(ref, hyp):
@@ -297,6 +353,9 @@ def main():
     p.add_argument("--hf", action="append", default=[], metavar="NAME[:SPLIT]",
                    help="also train on a Hugging Face Khmer speech dataset (repeat for more); check its license first")
     p.add_argument("--hf-max", type=int, default=20000, help="at most this many clips from each --hf dataset")
+    p.add_argument("--more-khmer", type=int, default=0, metavar="N",
+                   help="also train on the N most used Khmer speech datasets on Hugging Face (found automatically)")
+    p.add_argument("--current", help="the hearing Virgo uses now, which the new one must beat to be uploaded (default: --push)")
     p.add_argument("--steps", type=int, default=2000)
     p.add_argument("--batch", type=int, default=8)
     p.add_argument("--lr", type=float, default=1e-4, help="LoRA learning rate (use ~1e-5 with --full)")
@@ -324,10 +383,18 @@ def main():
         rows += [(path, text) for _, path, text in download_slr42(args.work)]
     if not args.no_fleurs:
         rows += fleurs(args.work)
+    if args.more_khmer:
+        args.hf += [d for d in find_khmer_datasets(args.more_khmer) if d not in args.hf]
     for spec in args.hf:
         rows += hf_dataset(args.work, spec, args.hf_max)
     if args.extra:
         rows += read_extra(args.extra)
+    blocked = test_sentences()
+    if blocked:
+        before_block = len(rows)
+        rows = [r for r in rows if norm_text(r[1]) not in blocked]
+        if len(rows) < before_block:
+            print(f"Left out {before_block - len(rows)} clips whose sentence is in the hearing test")
     if len(rows) < 20:
         raise SystemExit("❌ Not enough training clips.")
     random.Random(42).shuffle(rows)
@@ -365,15 +432,16 @@ def main():
     # Starting from another Whisper (e.g. a community Khmer fine-tune): the upload must also beat the
     # hearing Virgo has now, scored on the same clips.
     current = float("inf")
-    if args.push and args.push != args.base:
+    compare = args.current or args.push
+    if compare and compare != args.base:
         try:
             from huggingface_hub import HfApi
 
-            if HfApi().file_exists(args.push, "config.json"):
-                old_model = WhisperForConditionalGeneration.from_pretrained(args.push, dtype=torch.float32)
+            if HfApi().file_exists(compare, "config.json"):
+                old_model = WhisperForConditionalGeneration.from_pretrained(compare, dtype=torch.float32)
                 old_model.generation_config.forced_decoder_ids = None
                 current = score(old_model.to("cuda") if gpu else old_model, processor, evals)
-                print(f"Khmer CER of the current {args.push}: {current:.1%}")
+                print(f"Khmer CER of the current {compare}: {current:.1%}")
                 del old_model
                 if gpu:
                     torch.cuda.empty_cache()
@@ -440,7 +508,7 @@ def main():
     if not keeps_others:
         args.push = None
     if args.push and after <= before and after > current:
-        print(f"⚠️ Not uploaded: the current {args.push} is still better ({current:.1%} vs {after:.1%}).")
+        print(f"⚠️ Not uploaded: the current {compare} is still better ({current:.1%} vs {after:.1%}).")
     if args.push and after <= before and after <= current:
         from huggingface_hub import HfApi
 
