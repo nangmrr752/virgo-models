@@ -26,9 +26,17 @@ engine_python() {
     echo "📦 Setting up $name ($package) in $dir" >&2
     python -m venv "$dir" >&2
     "$dir/bin/pip" install -q -U pip >&2
-    # PyTorch for CUDA 12.1 (runs on driver 535); the default build needs a newer driver and falls back to the CPU.
-    "$dir/bin/pip" install -q torch torchaudio --index-url https://download.pytorch.org/whl/cu121 >&2
     "$dir/bin/pip" install -q "$package" datasets soundfile librosa >&2
+  fi
+  # The package may bring a PyTorch built for a newer CUDA than this driver runs (then it falls back to the
+  # CPU, ~20x slower): swap in the newest build this driver can use (CUDA 12.6, 12.4, then 12.1).
+  if ! "$dir/bin/python" -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 1)" 2>/dev/null; then
+    for cu in cu126 cu124 cu121; do
+      echo "🔧 PyTorch for $cu in $name" >&2
+      "$dir/bin/pip" install -q --force-reinstall torch torchaudio --index-url "https://download.pytorch.org/whl/$cu" >&2 || continue
+      "$dir/bin/python" -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 1)" 2>/dev/null && break
+    done
+    "$dir/bin/python" -c "import torch; print('   PyTorch', torch.__version__, 'GPU:', torch.cuda.is_available())" >&2 || true
   fi
   echo "$dir/bin/python"
 }
