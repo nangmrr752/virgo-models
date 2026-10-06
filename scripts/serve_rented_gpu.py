@@ -110,7 +110,9 @@ for spec in filter(None, os.environ["VIRGO_CHAT_MODELS"].split(",")):
 HEARING = link_to_workspace("speech/out/virgo-1.0-stt")
 if True:
     try:
-        hearing_repo = next((r for r in candidates("Angkor-1.0-STT", api) if has_file(r, "config.json")), None)
+        # The newest hearing first: Angkor-1.1-STT (only uploaded when it beat 1.0), then Angkor-1.0-STT.
+        hearing_repo = next((r for r in candidates("Angkor-1.1-STT", api) + candidates("Angkor-1.0-STT", api)
+                             if has_file(r, "config.json")), None)
         if hearing_repo:
             print("⬇️ Downloading Virgo's Khmer hearing:", hearing_repo)
             snapshot_download(hearing_repo, local_dir=HEARING)

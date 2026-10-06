@@ -24,6 +24,7 @@ ROOT="$VIRGO_HOME"
 [ "${1:-}" = voice ] && { shift; exec bash "$CODE/scripts/train_voice_local.sh" "$@"; }  # Virgo's live voice
 [ "${1:-}" = score ] && { shift; exec bash "$CODE/scripts/score_server.sh" "$@"; }  # score the running server
 [ "${1:-}" = stttest ] && { shift; exec bash "$CODE/scripts/stt_test.sh" "$@"; }  # hearing test (Khmer CER)
+[ "${1:-}" = hearing-1.1 ] && { shift; exec bash "$CODE/scripts/train_hearing_local.sh" --v1.1 "$@"; }  # Angkor-1.1-STT
 [ "${1:-}" = hearing ] && { shift; exec bash "$CODE/scripts/train_hearing_local.sh" "$@"; }  # Virgo's hearing (Whisper)
 [ "${1:-}" = distill ] && { shift; exec bash "$CODE/scripts/smart_local.sh" distill "$@"; }  # checked examples + DPO pairs
 [ "${1:-}" = basetest-gguf ] && { shift; exec bash "$CODE/scripts/smart_local.sh" basetest-gguf "$@"; }  # a GGUF base in llama.cpp

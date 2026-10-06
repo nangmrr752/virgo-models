@@ -15,7 +15,7 @@ CODE="$(cd "$(dirname "$0")/.." && pwd)"
 source "$CODE/scripts/env_auto.sh"
 cd "$CODE"
 export VIRGO_HOME
-MODELS=${STT_MODELS:-"whisper:virgoai/Angkor-1.0-STT whisper:openai/whisper-large-v3-turbo qwen3asr:seanghay/Qwen3-ASR-0.6B-Khmer omni:omniASR_LLM_1B"}
+MODELS=${STT_MODELS:-"whisper:virgoai/Angkor-1.1-STT whisper:virgoai/Angkor-1.0-STT whisper:openai/whisper-large-v3-turbo qwen3asr:seanghay/Qwen3-ASR-0.6B-Khmer omni:omniASR_LLM_1B"}
 STAMP=$(date +%Y%m%d-%H%M)
 REPORTS=()
 
