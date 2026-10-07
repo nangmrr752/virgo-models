@@ -443,6 +443,9 @@ def main():
                 current = score(old_model.to("cuda") if gpu else old_model, processor, evals)
                 print(f"Khmer CER of the current {compare}: {current:.1%}")
                 del old_model
+                import gc
+
+                gc.collect()
                 if gpu:
                     torch.cuda.empty_cache()
         except Exception as err:
@@ -471,7 +474,7 @@ def main():
             max_steps=args.steps, fp16=gpu, gradient_checkpointing=gpu,
             gradient_checkpointing_kwargs={"use_reentrant": False} if gpu else None,
             logging_steps=25, save_strategy="no", report_to=[], remove_unused_columns=False,
-            label_names=["labels"], dataloader_num_workers=2 if gpu else 0,
+            label_names=["labels"], dataloader_num_workers=int(os.environ.get("VIRGO_HEARING_WORKERS", "0")),  # each worker copies the process: RAM
         ),
         train_dataset=Clips(train),
         data_collator=Collator(processor),
