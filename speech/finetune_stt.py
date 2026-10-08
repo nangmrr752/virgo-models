@@ -355,6 +355,8 @@ def main():
     p.add_argument("--hf-max", type=int, default=20000, help="at most this many clips from each --hf dataset")
     p.add_argument("--more-khmer", type=int, default=0, metavar="N",
                    help="also train on the N most used Khmer speech datasets on Hugging Face (found automatically)")
+    p.add_argument("--save-every", type=int, default=500, help="save a checkpoint every N steps, so a stopped run can continue")
+    p.add_argument("--fresh", action="store_true", help="start over instead of continuing a stopped run")
     p.add_argument("--current", help="the hearing Virgo uses now, which the new one must beat to be uploaded (default: --push)")
     p.add_argument("--steps", type=int, default=2000)
     p.add_argument("--batch", type=int, default=8)
@@ -473,14 +475,24 @@ def main():
             gradient_accumulation_steps=max(1, 16 // args.batch), learning_rate=args.lr, warmup_steps=min(200, args.steps // 10),
             max_steps=args.steps, fp16=gpu, gradient_checkpointing=gpu,
             gradient_checkpointing_kwargs={"use_reentrant": False} if gpu else None,
-            logging_steps=25, save_strategy="no", report_to=[], remove_unused_columns=False,
+            logging_steps=25, save_strategy="steps", save_steps=args.save_every, save_total_limit=1, report_to=[], remove_unused_columns=False,
             label_names=["labels"], dataloader_num_workers=int(os.environ.get("VIRGO_HEARING_WORKERS", "0")),  # each worker copies the process: RAM
         ),
         train_dataset=Clips(train),
         data_collator=Collator(processor),
     )
     if trainer:
-        trainer.train()
+        # A run stopped part-way (power cut, crash) continues from its last checkpoint (every --save-every steps).
+        import glob
+        import shutil
+
+        run_dir = os.path.join(args.work, "run")
+        saved = sorted(glob.glob(os.path.join(run_dir, "checkpoint-*")), key=lambda d: int(d.rsplit("-", 1)[1]))
+        resume = saved[-1] if saved and not args.fresh else None
+        if resume:
+            print(f"↩️ Continuing the stopped run from {os.path.basename(resume)}")
+        trainer.train(resume_from_checkpoint=resume)
+        shutil.rmtree(run_dir, ignore_errors=True)  # done: the checkpoints aren't needed any more
 
     if not args.full:
         model = model.merge_and_unload()
