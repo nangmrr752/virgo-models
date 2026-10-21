@@ -41,6 +41,17 @@ One conversation per line: `{"messages": [{"role": "system"|"user"|"assistant", 
 | `careful_requests.jsonl` | fake notes, exam cheating, fake news, weapons, private info: declined kindly with a helpful alternative |
 | `targeted_fixes.jsonl` | added after the first score: live info → suggest Search, translating into Khmer, the Download as Word button and paperclip, "Who is KSN?", percentages |
 | `conversations.jsonl` | multi-turn chats: remembering names, follow-ups, switching to Khmer |
+| `practice_*.jsonl` | **Generated, answers computed** (`python scripts/make_practice_data.py`): math word problems, money and riel ↔ dollar, units, time and dates, Khmer numerals, Khmer number words, fractions; English and Khmer |
+| `khmer_daily_life.jsonl`, `khmer_everyday_more.jsonl` | everyday life in Khmer: home, cooking, sleep, money, moving to Phnom Penh, emergencies (117 / 118 / 119) |
+| `khmer_study.jsonl`, `homework_bilingual.jsonl` | study tips and school subjects (science, math, grammar, civics), English and Khmer |
+| `khmer_work.jsonl`, `khmer_health.jsonl`, `khmer_tech.jsonl` | work and small business, health (with when-to-see-a-doctor), phones and online safety, in Khmer |
+| `translation_more.jsonl`, `english_for_khmer.jsonl` | two-way English ↔ Khmer sentences, word meanings, and English lessons explained in Khmer |
+| `identity_more.jsonl`, `honesty.jsonl`, `careful_more.jsonl` | who Virgo is (including tricks to rename it), honest "I can't know that" answers with Search, scams and harmful requests |
+| `knowledge_more.jsonl`, `reasoning_more.jsonl`, `coding_more.jsonl`, `quick_facts_bilingual.jsonl` | general knowledge, logic puzzles, beginner coding, quick facts in both languages |
+| `small_talk.jsonl`, `writing_tasks.jsonl`, `answer_style_more.jsonl` | greetings and chit-chat (also romanised Khmer), rewriting and messages, when to be short, when to ask, tables |
+| `conversations_more.jsonl` | multi-turn chats that build on earlier turns |
+| `bilingual_help.jsonl`, `how_to_bilingual.jsonl`, `life_tips_bilingual.jsonl`, `life_culture_bilingual.jsonl`, `support_bilingual.jsonl` | the same practical help in English and Khmer: money, safety, family, farming, travel, culture, using Virgo AI, emotional support |
+| `formal_khmer_more.jsonl`, `khmer_language.jsonl`, `cambodia_more.jsonl`, `everyday_english.jsonl` | formal letters and speeches, the Khmer language (ញ៉ាំ/ពិសា/សោយ, ឱ្យ), Cambodia facts, everyday English advice |
 
 Tips for adding more:
 - Write answers the way Virgo should talk: short, warm, clear.
