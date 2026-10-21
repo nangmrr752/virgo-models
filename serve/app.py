@@ -4,6 +4,8 @@
 
   POST /v1/chat        {"messages": [...], "model": "virgo-1.0-bayon"}    → {"reply": "..."}  (model: optional;
                        "stream": true → NDJSON lines {"t": "..."} as it writes)
+  POST /v1/chat/completions  OpenAI-compatible, with tool calling, for the llama.cpp models (Angkor-2.0,
+                       Bayon-2.0) — what Virgo Coder uses. Passed straight to llama.cpp.
   POST /v1/tts         {"text": "សួស្តី", "voice": "af_heart"}              → audio/wav
   POST /v1/stt         audio file (form field "file"), ?language=khmer     → {"text": "..."}
   POST /v1/transcribe  audio file (form field "file"), ?srt=1              → {"segments": [...]} or .srt
@@ -26,7 +28,7 @@ import sys
 import tempfile
 
 import soundfile as sf
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, WebSocket
+from fastapi import Body, Depends, FastAPI, File, Header, HTTPException, UploadFile, WebSocket
 from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
@@ -194,7 +196,9 @@ def models():
     llama_name = (os.environ.get("VIRGO_LLAMA_NAME", "").strip() or "Angkor-2.0") if os.environ.get("VIRGO_LLAMA_URL", "").strip() else ""
     bayon_name = (os.environ.get("VIRGO_BAYON_NAME", "").strip() or "Bayon-2.0") if llama_bayon() else "Bayon-1.0"
     names = {m: (llama_name if i == 0 and llama_name else bayon_name if "bayon" in m else "Angkor-1.0") for i, m in enumerate(ids)}
-    return {**info, "chat_models": ids, "chat_names": names} if isinstance(info, dict) else info
+    # The models that can call tools through /v1/chat/completions (the llama.cpp ones): Virgo Coder offers these.
+    tools = [m for i, m in enumerate(ids) if llama_name and (i == 0 or (m == "virgo-1.0-bayon" and llama_bayon()))]
+    return {**info, "chat_models": ids, "chat_names": names, "tool_models": tools} if isinstance(info, dict) else info
 
 
 @app.post("/v1/chat", dependencies=[Depends(auth)])
@@ -217,6 +221,42 @@ def chat(body: ChatBody):
     with lock:
         reply = bot.reply(body.messages, max_tokens, body.temperature)
     return {"model": body.model or next(iter(chat_models())), "reply": reply}
+
+
+@app.post("/v1/chat/completions", dependencies=[Depends(auth)])
+def chat_completions(body: dict = Body(...)):
+    """OpenAI-compatible chat with tool calling (Virgo Coder), passed straight to llama.cpp. llama-server
+    runs with --jinja, so it reads `tools` and answers with `tool_calls`. "model" picks Bayon-2.0 when it
+    names bayon (the switcher loads it on demand), else Angkor-2.0. Errors keep llama.cpp's own status."""
+    import urllib.error
+    import urllib.request
+
+    llama = os.environ.get("VIRGO_LLAMA_URL", "").strip()
+    if not llama:
+        raise HTTPException(404, "Tool calling needs the llama.cpp models (set VIRGO_LLAMA_URL).")
+    if not isinstance(body.get("messages"), list) or not body["messages"]:
+        raise HTTPException(400, "No messages.")
+    wanted = str(body.get("model") or "").lower()
+    body["model"] = "bayon" if "bayon" in wanted and llama_bayon() else "angkor"
+    body["max_tokens"] = max(1, min(int(body.get("max_tokens") or 1024), 4096))
+    # No thinking first unless asked: Gemma 4 can spend the whole budget thinking (see llama_chat.py).
+    body.setdefault("chat_template_kwargs", {"enable_thinking": os.environ.get("VIRGO_LLAMA_THINK") == "1"})
+    req = urllib.request.Request(llama.rstrip("/") + "/v1/chat/completions", data=json.dumps(body).encode(),
+                                 method="POST", headers={"content-type": "application/json"})
+    try:
+        res = urllib.request.urlopen(req, timeout=600)  # Bayon-2.0's first answer waits for it to load
+    except urllib.error.HTTPError as err:
+        return Response(err.read(), status_code=err.code, media_type="application/json")
+    except OSError as err:
+        raise HTTPException(502, f"llama.cpp isn't answering: {err}")
+    if body.get("stream"):
+        def events():
+            with res:
+                for line in res:
+                    yield line
+        return StreamingResponse(events(), media_type="text/event-stream")
+    with res:
+        return Response(res.read(), media_type="application/json")
 
 
 @app.post("/v1/tts", dependencies=[Depends(auth)])
